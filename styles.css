@@ -1188,3 +1188,14 @@ ul { margin: 0; padding: 0; list-style: none; }
   .approval-actions { padding-left: 0; }
   .approval-status { padding-left: 0; }
 }
+
+/* Mobile footer: keep Back/Next tappable on narrow phones */
+@media (max-width: 560px) {
+  .navfoot-inner { padding: 0 12px; gap: 8px; }
+  .navfoot-hint { display: none; }
+  .navfoot .btn { flex: 1 1 0; min-width: 0; }
+  .navfoot .btn.btn-launch { height: 44px; padding: 0 14px; font-size: 14px; }
+  #btn-back[style*="hidden"] { flex: 0 0 0; padding: 0; border: 0; }
+  .tool-row { flex-wrap: wrap; }
+  .tool-row .tool-status { margin-left: 52px; }
+}
