@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paws & Pantry · Neighborhood Agents Demo</title>
+  <meta name="description" content="Paws & Pantry: interactive AI agent team demo (illustrative data)." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top chrome -->
+    <header class="topbar" id="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.2 4.6L19 8.3l-3.5 3.4.8 4.8L12 14.2 7.7 16.5l.8-4.8L5 8.3l4.8-.7L12 3z" fill="currentColor"/></svg>
+          </span>
+          <span class="brand-name">Neighborhood Agents</span>
+        </div>
+        <div class="progress" id="progress" aria-label="Setup progress"></div>
+        <div class="demo-badge">Sales demo · illustrative data</div>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <!-- Screens injected by JS -->
+    </main>
+
+    <footer class="navfoot" id="navfoot">
+      <div class="navfoot-inner">
+        <button type="button" class="btn btn-ghost" id="btn-back">Back</button>
+        <div class="navfoot-hint" id="nav-hint"></div>
+        <button type="button" class="btn btn-primary" id="btn-next">Next</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Launch overlay -->
+  <div class="launch-overlay" id="launch-overlay" hidden>
+    <div class="launch-card">
+      <div class="launch-orb" aria-hidden="true"></div>
+      <h2 class="launch-title">Standing up your team…</h2>
+      <p class="launch-sub">Connecting tools and bringing agents online</p>
+      <ul class="launch-list" id="launch-list"></ul>
+      <div class="launch-bar"><div class="launch-bar-fill" id="launch-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
