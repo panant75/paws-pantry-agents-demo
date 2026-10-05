@@ -1,5 +1,5 @@
 /* =========================================================
-   Neighborhood Agents — interactive sales demo
+   Gemini agent team — interactive sales demo (Paws & Pantry)
    Change BUSINESS_CONFIG below to re-theme the whole demo.
    All numbers are SAMPLE / ILLUSTRATIVE.
    ========================================================= */
@@ -13,7 +13,7 @@ const BUSINESS_CONFIG = {
   tagline: "Neighborhood pet-food shop with subscription delivery",
 };
 
-const STEP_LABELS = ["Welcome", "Pains", "Agents", "Setup", "Dashboard", "Summary"];
+const STEP_LABELS = ["Welcome", "Pains", "Agents", "Connect", "Dashboard", "Home"];
 
 /* Two-level, MECE pain structure. Hours/$ per sub-point are ILLUSTRATIVE weekly weights. */
 const PAIN_GROUPS = [
@@ -66,7 +66,7 @@ const AGENT_HOME_GROUP = { growth: "acquire", pal: "retain", orders: "retain", p
 const CONNECTORS = {
   gads: { name: "Google Ads", desc: "Search ad spend & results", initials: "GA", color: "#4285F4" },
   meta: { name: "Meta (Facebook & Instagram)", desc: "Ads, posts & audiences", initials: "Me", color: "#0866FF" },
-  tiktok: { name: "TikTok", desc: "Short videos & ads", initials: "Tk", color: "#111111" },
+  tiktok: { name: "TikTok", desc: "Short videos & ads", initials: "Tk", color: "#EE1D52" },
   gbp: { name: "Google Business Profile", desc: "Maps listing & reviews", initials: "GB", color: "#34A853" },
   klaviyo: { name: "Klaviyo or Mailchimp", desc: "Email & SMS campaigns", initials: "Kl", color: "#232323" },
   gmail: { name: "Gmail", desc: "Customer emails & replies", initials: "Gm", color: "#EA4335" },
@@ -228,6 +228,7 @@ function freshState() {
     selectedSubs: [],
     painGroup: null,
     showMore: false,
+    homeTasks: [],
     agentsOn: {},
     _agentsTouched: false,
     tools: {},
@@ -636,18 +637,32 @@ function renderProgress() {
 }
 
 function setNav() {
-  btnBack.disabled = state.step === 0;
-  btnBack.style.visibility = state.step === 0 ? "hidden" : "visible";
-  btnBack.textContent = state.step === 1 && state.painGroup ? "All pain points" : "Back";
-  const labels = { 3: "Launch my team", 4: "See summary", 5: "Get started" };
-  btnNext.textContent = labels[state.step] || "Next";
+  const inSub = state.step === 1 && !!state.painGroup;
+  const nPicked = state.selectedSubs.length;
+  btnBack.disabled = state.step === 0 || inSub;
+  btnBack.style.visibility = state.step === 0 || inSub ? "hidden" : "visible";
+  btnBack.innerHTML = `<span class="bk-arrow" aria-hidden="true">←</span><span class="bk-label">Back</span>`;
+  btnBack.setAttribute("aria-label", "Back");
+  const labels = { 0: "Continue", 3: "Continue", 4: "Go to Gemini home", 5: "Get started" };
+  if (inSub) {
+    btnNext.textContent = "Save & back to all pain points";
+    btnNext.dataset.mode = "save-back";
+  } else if (state.step === 1) {
+    btnNext.innerHTML = `Done, show my agents <span class="nx-count">(${nPicked}<span class="nx-long"> problem${nPicked === 1 ? "" : "s"}</span> picked)</span>`;
+    btnNext.dataset.mode = "advance";
+  } else {
+    btnNext.textContent = labels[state.step] || "Next";
+    btnNext.dataset.mode = "next";
+  }
+  document.getElementById("navfoot")?.classList.toggle("menu-mode", state.step === 1 && !inSub);
+  document.getElementById("navfoot")?.classList.toggle("sub-mode", inSub);
   btnNext.classList.toggle("btn-launch", state.step === 3);
   let ok = true; let hint = "";
   if (state.step === 0) ok = !!(state.business.name.trim() && state.business.type && state.business.size);
   else if (state.step === 1) {
-    const n = state.selectedSubs.length;
-    ok = n >= 1;
-    hint = n ? `${n} problem${n === 1 ? "" : "s"} picked · tap ⓘ to see the math` : "Tap a pain area to pick what applies";
+    const n = nPicked;
+    ok = inSub || n >= 1;
+    hint = inSub ? "Your picks are saved. Pick from other areas too." : n ? `${n} picked across ${selectedGroups().length} area${selectedGroups().length === 1 ? "" : "s"} · open any area to add more` : "Open any area and pick at least one problem";
   } else if (state.step === 2) { ok = activeAgents().length >= 1; hint = `${activeAgents().length} agents · each with its own voice`; }
   else if (state.step === 3) hint = "Mock connections · nothing leaves this demo";
   else if (state.step === 4) hint = "Sample data · tap ⓘ on any number";
@@ -727,6 +742,7 @@ function render(opts = {}) {
   setNav();
   const renderers = [renderWelcome, renderPains, renderAgents, renderSetup, renderDashboard, renderClosing];
   stage.innerHTML = "";
+  scrollHintObs?.disconnect(); document.querySelector(".scroll-hint")?.remove();
   const screen = document.createElement("div");
   screen.className = opts.keepScroll ? "screen no-anim" : "screen";
   screen.dataset.step = String(state.step);
@@ -741,39 +757,27 @@ function renderWelcome() {
   const sizes = ["Just me", "1–5 people", "6–20 people", "20+ people"];
   const types = ["Pet food shop", "Cafe / bakery", "Boutique retail", "Home services", "Salon / spa", "Other local business"];
   return `
-    <div class="screen-eyebrow">Step 1 · About your shop</div>
-    <h1 class="screen-title">Let's find where you're losing time and money</h1>
-    <p class="screen-sub">Tell us a little about the business. We'll map the busywork to a small team of helpful agents. No jargon required.</p>
-    <div class="welcome-hero">
-      <div class="welcome-card">
-        <div class="form-grid">
-          <div class="field">
-            <label for="biz-name">Business name</label>
-            <input id="biz-name" type="text" value="${escapeHtml(state.business.name)}" autocomplete="organization" />
+    <div class="focus">
+      <div class="screen-eyebrow">Getting to know you</div>
+      <h1 class="screen-title">What do you do?</h1>
+      <p class="screen-sub">So Gemini knows what matters to you.</p>
+      <label class="sr-only" for="biz-name">Business name</label>
+      <input id="biz-name" class="big-input" type="text" value="${escapeHtml(state.business.name)}" autocomplete="organization" placeholder="Your business name" />
+      <div class="focus-fields">
+        <div class="field">
+          <label>What kind of business?</label>
+          <div class="chip-row" id="type-chips">
+            ${types.map((t) => `<button type="button" class="chip ${state.business.type === t ? "selected" : ""}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("")}
           </div>
-          <div class="field">
-            <label>What kind of business?</label>
-            <div class="chip-row" id="type-chips">
-              ${types.map((t) => `<button type="button" class="chip ${state.business.type === t ? "selected" : ""}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("")}
-            </div>
-          </div>
-          <div class="field">
-            <label>Team size</label>
-            <div class="chip-row" id="size-chips">
-              ${sizes.map((s) => `<button type="button" class="chip ${state.business.size === s ? "selected" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
-            </div>
+        </div>
+        <div class="field">
+          <label>Team size</label>
+          <div class="chip-row" id="size-chips">
+            ${sizes.map((s) => `<button type="button" class="chip ${state.business.size === s ? "selected" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
           </div>
         </div>
       </div>
-      <aside class="welcome-aside">
-        <h3>How this demo works</h3>
-        <p>In about two minutes you'll see how ${escapeHtml(state.business.name)} could put an AI crew to work, with you still in charge.</p>
-        <div class="aside-list">
-          <div class="aside-item"><span class="aside-num">1</span><div><strong>Name the pains</strong>Pick where time and money leak.</div></div>
-          <div class="aside-item"><span class="aside-num">2</span><div><strong>Meet your agents</strong>Pick the team and give each one a voice.</div></div>
-          <div class="aside-item"><span class="aside-num">3</span><div><strong>Launch & peek</strong>A sample week of wins. Every number shows its source.</div></div>
-        </div>
-      </aside>
+      <p class="focus-note">Next: pick what's getting in the way, meet your agents, connect your apps. Every number is sample data with a visible source.</p>
     </div>`;
 }
 
@@ -809,10 +813,12 @@ function renderPains() {
 
 function renderPainMenu() {
   return `
-    <div class="screen-eyebrow">Step 2 · Pain-point discovery</div>
+    <div class="screen-eyebrow">Getting to know you</div>
     <h1 class="screen-title">Where does ${escapeHtml(state.business.name)} feel the pinch?</h1>
-    <p class="screen-sub">Tap an area to see what's inside. Pick what applies and set how much it hurts. The totals are <strong>illustrative estimates</strong>.</p>
+    <p class="screen-sub">Open any of the 5 areas, in any order, and pick what applies. When you've covered everything, tap <strong>Done</strong>. Totals are <strong>illustrative estimates</strong>.</p>
     <div class="pain-layout">
+      <div class="menu-col">
+      ${selectedGroups().length ? `<div class="picked-row" aria-label="Areas picked">${selectedGroups().map((g) => `<button type="button" class="picked-chip" data-group="${g.id}">${g.icon} ${escapeHtml(g.short)} <b>${countIn(g)}</b></button>`).join("")}</div>` : ""}
       <div class="group-list" id="group-list">
         ${PAIN_GROUPS.map((g) => {
           const n = countIn(g);
@@ -828,12 +834,30 @@ function renderPainMenu() {
           </button>`;
         }).join("")}
       </div>
+      <p class="menu-foot-note" id="menu-end">That's all 5 areas. Tap <strong>Done</strong> below when you're ready.</p>
+      </div>
       ${tallyHTML()}
     </div>`;
 }
 
+/* "More areas below" pill on phones until the last area card is on screen. */
+let scrollHintObs = null;
+function setupScrollHint() {
+  scrollHintObs?.disconnect();
+  document.querySelector(".scroll-hint")?.remove();
+  const last = document.querySelector('.group-card:last-child');
+  if (!last || !("IntersectionObserver" in window)) return;
+  const pill = document.createElement("button");
+  pill.type = "button"; pill.className = "scroll-hint"; pill.hidden = true;
+  pill.innerHTML = "↓ Scroll for all 5 areas";
+  pill.addEventListener("click", () => last.scrollIntoView({ behavior: "smooth", block: "center" }));
+  document.body.appendChild(pill);
+  scrollHintObs = new IntersectionObserver(([en]) => { pill.hidden = en.isIntersecting; }, { rootMargin: `0px 0px -${(document.getElementById("navfoot")?.offsetHeight || 76)}px 0px`, threshold: 0.9 });
+  scrollHintObs.observe(last);
+}
+
 function renderPainGroup(g) {
-  const agents = [...new Set(g.subs.flatMap((s) => s.agents))].map(agentById);
+  const allOn = g.subs.every((s) => subSel(s.id));
   return `
     <div class="sub-top">
       <button type="button" class="btn btn-soft btn-sm back-menu" data-back-menu>← Back to all pain points</button>
@@ -844,9 +868,13 @@ function renderPainGroup(g) {
       </nav>
     </div>
     <h1 class="screen-title group-heading"><span class="group-icon sm" style="background:${g.color}" aria-hidden="true">${g.icon}</span><span>${escapeHtml(g.title)}</span></h1>
-    <p class="screen-sub">Pick what applies and set how much it hurts. Tap “Back to all pain points” (or swipe right on a phone) when you’re done.</p>
+    <p class="screen-sub">Pick what applies and set how much it hurts. Then save and go back to check the other areas. Agents and connectors come after you've seen the full list.</p>
     <div class="pain-layout">
       <div class="sub-col">
+        <div class="sub-list-head">
+          <span>${countIn(g)} of ${g.subs.length} picked</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-select-all="${g.id}" aria-pressed="${allOn}">${allOn ? "Clear all" : "Select all"}</button>
+        </div>
         <div class="sub-list" id="sub-list">
           ${g.subs.map((s) => {
             const sel = subSel(s.id);
@@ -865,18 +893,6 @@ function renderPainGroup(g) {
             </div>`;
           }).join("")}
         </div>
-        <section class="connectors-box" aria-label="Suggested connectors">
-          <h3>Suggested connectors</h3>
-          <p class="hint">What your agents would plug into for this. You'll connect them (mock) in Step 4.</p>
-          <div class="conn-chips">
-            ${g.connectors.map((c) => {
-              const k = CONNECTORS[c.id];
-              return `<span class="conn-chip"><span class="conn-logo" style="background:${k.color}">${k.initials}</span>${escapeHtml(c.label || k.name)}</span>`;
-            }).join("")}
-          </div>
-          <p class="conn-agents">Agents for this: ${agents.map((a) => `${a.icon} ${escapeHtml(a.name)}`).join(" · ")}</p>
-        </section>
-        <button type="button" class="btn btn-primary back-menu-bottom" data-back-menu>← Back to all pain points</button>
       </div>
       ${tallyHTML()}
     </div>`;
@@ -949,7 +965,7 @@ function agentCardHTML(a, rec) {
 function renderAgents() {
   const rec = recommendedAgents();
   return `
-    <div class="screen-eyebrow">Step 3 · Recommended agent team</div>
+    <div class="screen-eyebrow">Your agent team</div>
     <h1 class="screen-title">Meet the crew for ${escapeHtml(state.business.name)}</h1>
     <p class="screen-sub">Based on the problems you picked (${escapeHtml(selectedGroups().map((g) => g.short).join(", ") || "none yet")}), we pre-selected a lean team. Toggle anyone on or off (Store Captain stays on to coordinate), and give each agent its own voice.</p>
     <div class="agent-grid" id="agent-grid">${AGENTS.map((a) => agentCardHTML(a, rec)).join("")}</div>`;
@@ -960,10 +976,12 @@ function toolRowHTML(id, note) {
   const on = !!state.tools[id];
   return `
               <div class="tool-row ${on ? "connected" : ""}" data-tool="${id}">
-                <div class="tool-icon" style="background:${k.color}">${k.initials}</div>
+                <div class="tool-icon app-ico" style="--c:${k.color}">${k.initials}</div>
                 <div class="tool-info"><strong>${escapeHtml(k.name)}</strong><span>${escapeHtml(note || k.desc)}</span></div>
-                <span class="tool-status">${on ? "Connected" : "Not connected"}</span>
-                <button type="button" class="btn btn-sm ${on ? "btn-ghost" : "btn-soft"}" data-tool-btn="${id}" aria-label="${on ? "Disconnect" : "Connect"} ${escapeHtml(k.name)}">${on ? "Disconnect" : "Connect"}</button>
+                <span class="tool-status sr-only">${on ? "Connected" : "Not connected"}</span>
+                ${on
+                  ? `<button type="button" class="conn-check" data-tool-btn="${id}" aria-label="Connected. Disconnect ${escapeHtml(k.name)}" title="Connected · tap to disconnect"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+                  : `<button type="button" class="btn btn-sm btn-connect" data-tool-btn="${id}" aria-label="Connect ${escapeHtml(k.name)}">Connect</button>`}
               </div>`;
 }
 function connectorsHTML() {
@@ -998,12 +1016,12 @@ function connectorsHTML() {
 function renderSetup() {
   const active = activeAgents();
   return `
-    <div class="screen-eyebrow">Step 4 · One-click setup</div>
-    <h1 class="screen-title">Connect tools & set the ground rules</h1>
-    <p class="screen-sub">Mock toggles only. This demo never connects to real accounts. Check each agent's voice and choose when they ask permission.</p>
+    <div class="screen-eyebrow">Setting up</div>
+    <h1 class="screen-title">Bring your work with you</h1>
+    <p class="screen-sub">Connect your apps so your team starts with context. Mock connections only; this demo never touches real accounts.</p>
     <div class="setup-grid">
       <section class="setup-section">
-        <h3>Connect the tools you already use</h3>
+        <h3>Your apps</h3>
         <p class="hint">Only what your picked pains need, grouped by pain. Illustrative connections for the demo walkthrough.</p>
         <div id="connectors">${connectorsHTML()}</div>
       </section>
@@ -1086,7 +1104,7 @@ function renderDashboard() {
   return `
     <div class="dash-header">
       <div>
-        <div class="screen-eyebrow">Step 5 · Day-one dashboard</div>
+        <div class="screen-eyebrow">Day one</div>
         <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
         <p class="screen-sub" style="margin-bottom:0">A sample look at what your agents already handled, and what still needs your OK.${selectedGroups().length ? ` Working on: <strong>${escapeHtml(selectedGroups().map((g) => g.short).join(" · "))}</strong>.` : ""}</p>
       </div>
@@ -1176,13 +1194,57 @@ function renderDashboard() {
     </div>`;
 }
 
+/* ---------- Home (final screen): prompt box + "Your tasks" ---------- */
+function homeTasks() {
+  const tasks = [];
+  sampleApprovals().forEach((a) => {
+    const g = agentGroup(a.agentId);
+    tasks.push({ agentId: a.agentId, title: a.title, status: state.approvalsResolved[a.id] === "approved" ? "Done · approved by you" : state.approvalsResolved[a.id] === "edited" ? "Revising your edit" : "Waiting on your approval", wait: !state.approvalsResolved[a.id], group: g });
+  });
+  sampleFeed().slice(0, 3).forEach((f) => tasks.push({ agentId: f.agentId, title: f.text.replace(/^(Replied to|Flagged|Confirmed|Grouped|Queued|Compiled)/, (m) => ({ "Replied to": "Replying to", Flagged: "Watching", Confirmed: "Confirming", Grouped: "Grouping", Queued: "Drafting", Compiled: "Compiling" }[m])), status: "Working on it", wait: false }));
+  (state.homeTasks || []).forEach((t) => tasks.unshift({ agentId: "captain", title: t, status: "Working on it", wait: false, mine: true }));
+  return tasks.slice(0, 7);
+}
+function homeHTML() {
+  const tasks = homeTasks();
+  return `
+    <section class="home" aria-label="Home">
+      <h1 class="home-title">Good afternoon, ${escapeHtml(BUSINESS_CONFIG.ownerFirstName)}</h1>
+      <form class="prompt-box" id="prompt-form">
+        <label class="sr-only" for="prompt-input">Work with Gemini</label>
+        <div class="prompt-row"><span class="prompt-pin" aria-hidden="true">◎</span><input id="prompt-input" type="text" placeholder="Work with Gemini" autocomplete="off" /></div>
+        <div class="prompt-actions">
+          <button type="button" class="prompt-plus" aria-label="Add" data-prompt-plus>+</button>
+          <span class="prompt-mode">Auto <span aria-hidden="true">⌄</span></span>
+          <button type="submit" class="prompt-send" aria-label="Send">↑</button>
+        </div>
+      </form>
+      <div class="tasks">
+        <h2 class="tasks-head">Your tasks</h2>
+        <ul class="task-list" id="task-list">
+          ${tasks.map((t) => {
+            const a = agentById(t.agentId);
+            return `<li class="task ${t.wait ? "waiting" : ""}">
+              <button type="button" class="task-btn" ${t.wait ? `data-goto-dash` : ""}>
+                <span class="task-title">${a.icon} ${escapeHtml(t.title)}</span>
+                <span class="task-status">${escapeHtml(a.name)} · ${escapeHtml(t.status)}</span>
+              </button>
+            </li>`;
+          }).join("")}
+        </ul>
+        <p class="tasks-note">Sample tasks · illustrative</p>
+      </div>
+    </section>`;
+}
+
 function renderClosing() {
   const pains = selectedGroups();
   const agents = activeAgents();
   return `
+    ${homeHTML()}
     <div class="close-wrap">
-      <div class="screen-eyebrow" style="justify-content:center">Step 6 · Wrap-up</div>
-      <h1 class="screen-title" style="text-align:center">From busywork to a quiet crew</h1>
+      <div class="screen-eyebrow">Your setup at a glance</div>
+      <h2 class="screen-title sm">From busywork to a quiet crew</h2>
       <p class="screen-sub" style="margin-left:auto;margin-right:auto;text-align:center">Here's the story you just walked through for ${escapeHtml(state.business.name)}.</p>
       <div class="close-card">
         <div class="summary-path">
@@ -1216,7 +1278,7 @@ function renderClosing() {
           <button type="button" class="btn btn-ghost" id="cta-restart">Restart demo</button>
         </div>
       </div>
-      <p class="close-note">Neighborhood Agents · sales demo for small businesses</p>
+      <p class="close-note">Gemini · agent team demo for Paws &amp; Pantry · sample, illustrative data</p>
     </div>`;
 }
 
@@ -1239,10 +1301,20 @@ function bindScreen() {
   }
 
   if (state.step === 1) {
-    document.getElementById("group-list")?.addEventListener("click", (e) => {
+    stage.querySelectorAll(".group-list, .picked-row").forEach((el) => el.addEventListener("click", (e) => {
       const b = e.target.closest("[data-group]"); if (b) openGroup(b.dataset.group);
-    });
+    }));
+    setupScrollHint();
     stage.querySelectorAll("[data-back-menu]").forEach((b) => b.addEventListener("click", backToMenu));
+    stage.querySelector("[data-select-all]")?.addEventListener("click", (e) => {
+      const g = groupById(e.currentTarget.dataset.selectAll);
+      const allOn = g.subs.every((s) => subSel(s.id));
+      if (allOn) state.selectedSubs = state.selectedSubs.filter((x) => !g.subs.some((s) => s.id === x.id));
+      else g.subs.forEach((s) => { if (!subSel(s.id)) state.selectedSubs.push({ id: s.id, severity: 3 }); });
+      state._agentsTouched = false;
+      AGENTS.forEach((a) => { if (!a.alwaysOn) delete state.agentsOn[a.id]; });
+      render({ keepScroll: true });
+    });
     const list = document.getElementById("sub-list");
     list?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-sub-toggle]"); if (!b) return;
@@ -1333,6 +1405,17 @@ function bindScreen() {
   }
 
   if (state.step === 5) {
+    document.getElementById("prompt-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const inpEl = document.getElementById("prompt-input");
+      const t = inpEl.value.trim();
+      if (!t) { inpEl.focus(); return; }
+      state.homeTasks.push(t.length > 80 ? t.slice(0, 78) + "…" : t);
+      render({ keepScroll: true });
+      toast("Store Captain picked it up (demo). It'll show in Your tasks.");
+    });
+    document.querySelector("[data-prompt-plus]")?.addEventListener("click", () => toast("In the full product, you could attach files or photos here."));
+    document.getElementById("task-list")?.addEventListener("click", (e) => { if (e.target.closest("[data-goto-dash]")) go(4); });
     document.getElementById("cta-start")?.addEventListener("click", () => toast("In a real pitch, this opens signup. Nice work!"));
     document.getElementById("cta-restart")?.addEventListener("click", restartDemo);
   }
@@ -1355,31 +1438,88 @@ function restartDemo() {
   go(0);
 }
 
-/* ---------- Launch sequence ---------- */
+/* ---------- "Learning how you work" (runs after connectors) ---------- */
+const LEARN = {
+  gmail: { verb: "Reading your Gmail threads…", fact: "Most customer emails land between 7 and 9 PM" },
+  square: { verb: "Checking your Square sales…", fact: "Saturday is your busiest day; grain-free kibble is the top seller" },
+  gcal: { verb: "Looking at your calendar…", fact: "Deliveries run Tuesdays and Fridays; Thursdays are vendor days" },
+  shopify: { verb: "Scanning your online orders…", fact: "About 38% of orders are online, mostly subscription add-ons" },
+  recharge: { verb: "Reviewing subscriptions…", fact: "Subscribers are most likely to skip after their second box" },
+  quickbooks: { verb: "Reading your books…", fact: "Treats carry your best margin; delivery fees eat about 6%" },
+  stripe: { verb: "Checking payouts…", fact: "Payouts land every 2 business days" },
+  sheets: { verb: "Opening your spreadsheets…", fact: "You track supplier prices by hand in a sheet called \u201cVendors\u201d" },
+  gads: { verb: "Checking your search ads…", fact: "Search ads bring in most first-time buyers" },
+  meta: { verb: "Looking at Instagram & Facebook…", fact: "Short Reels get about 3× the reach of photo posts" },
+  tiktok: { verb: "Checking TikTok…", fact: "Unboxing videos with pets get the most views" },
+  gbp: { verb: "Reading your Google reviews…", fact: "Reviews praise friendly staff; a few mention late deliveries" },
+  klaviyo: { verb: "Checking your email campaigns…", fact: "Your monthly newsletter opens best on Sunday mornings" },
+  sms: { verb: "Checking text messages…", fact: "Customers answer texts faster than emails" },
+  igdm: { verb: "Reading Instagram DMs…", fact: "Most DMs ask \u201cwhen will my order arrive?\u201d" },
+  supplier: { verb: "Reading supplier emails…", fact: "Your main supplier delivers Thursdays with 5-day lead time" },
+  shipstation: { verb: "Checking shipments…", fact: "Most packing mistakes are the wrong bag size" },
+  approvals: { verb: "Setting up one-tap approvals…", fact: "You prefer quick yes/no approvals on your phone" },
+};
+function learnSources() {
+  const order = [];
+  selectedGroups().forEach((g) => g.connectors.forEach((c) => { if (state.tools[c.id] && !order.includes(c.id)) order.push(c.id); }));
+  Object.keys(CONNECTORS).forEach((id) => { if (state.tools[id] && !order.includes(id)) order.push(id); });
+  return order.slice(0, 5);
+}
 function runLaunchSequence() {
   return new Promise((resolve) => {
     const agents = activeAgents();
+    const sources = learnSources();
+    const title = document.getElementById("learn-title");
+    const status = document.getElementById("learn-status");
+    const icons = document.getElementById("learn-icons");
+    const facts = document.getElementById("learn-facts");
+    const team = document.getElementById("launch-list");
+    const cont = document.getElementById("learn-continue");
+    title.textContent = "Learning how you work.";
+    status.textContent = "Getting started…";
+    cont.hidden = true; team.innerHTML = ""; team.hidden = true;
+    icons.innerHTML = sources.map((id) => {
+      const k = CONNECTORS[id];
+      return `<div class="learn-icon" data-learn="${id}"><span class="app-ico" style="--c:${k.color}">${k.initials}</span><span class="learn-icon-name">${escapeHtml(k.name.split(" (")[0].split(" or ")[0])}</span></div>`;
+    }).join("");
+    const factItems = [
+      { icon: "👤", text: `You run a ${state.business.type.toLowerCase()} with ${state.business.size.toLowerCase()}` },
+      ...sources.map((id) => ({ id, text: LEARN[id]?.fact || `Learned how you use ${CONNECTORS[id].name}` })),
+    ];
+    facts.innerHTML = "";
     launchOverlay.hidden = false;
-    const list = document.getElementById("launch-list");
-    const bar = document.getElementById("launch-bar-fill");
-    list.innerHTML = agents.map((a) => `<li data-launch="${a.id}"><span class="dot"></span>${a.icon} ${escapeHtml(a.name)} · standing by</li>`).join("");
-    bar.style.width = "0%";
-    const stepMs = 5200 / (agents.length + 1);
+    launchOverlay.scrollTop = 0;
+    const addFact = (f) => {
+      const li = document.createElement("li");
+      li.className = "learn-fact";
+      li.innerHTML = f.id
+        ? `<span class="app-ico xs" style="--c:${CONNECTORS[f.id].color}">${CONNECTORS[f.id].initials}</span><span>${escapeHtml(f.text)}</span>`
+        : `<span class="fact-ico" aria-hidden="true">${f.icon}</span><span>${escapeHtml(f.text)}</span>`;
+      facts.appendChild(li);
+    };
+    const STEP = 850;
     let i = 0;
     const tick = () => {
-      if (i < agents.length) {
-        const a = agents[i];
-        const li = list.querySelector(`[data-launch="${a.id}"]`);
-        if (li) { li.classList.add("online"); li.innerHTML = `<span class="dot"></span>${a.icon} ${escapeHtml(a.name)} · online, ${escapeHtml(presetLabel(state.voices[a.id].preset).toLowerCase())} voice`; }
-        bar.style.width = `${Math.round(((i + 1) / agents.length) * 100)}%`;
-        i += 1;
-        setTimeout(tick, stepMs);
-      } else {
-        bar.style.width = "100%";
-        setTimeout(() => { launchOverlay.hidden = true; resolve(); }, 450);
+      if (i === 0) addFact(factItems[0]);
+      if (i < sources.length) {
+        const id = sources[i];
+        icons.querySelectorAll(".learn-icon").forEach((el) => el.classList.toggle("active", el.dataset.learn === id));
+        icons.querySelector(`[data-learn="${id}"]`)?.classList.add("lit");
+        status.textContent = LEARN[id]?.verb || `Checking ${CONNECTORS[id].name}…`;
+        setTimeout(() => addFact(factItems[i + 1]), STEP * 0.55);
+        setTimeout(() => { i += 1; tick(); }, STEP);
+        return;
       }
+      icons.querySelectorAll(".learn-icon").forEach((el) => el.classList.remove("active"));
+      title.textContent = "Here\u2019s what I learned.";
+      status.textContent = `All done. ${factItems.length} things your team will remember (sample).`;
+      team.innerHTML = agents.map((a) => `<li class="online"><span class="dot"></span>${a.icon} ${escapeHtml(a.name)} · online, ${escapeHtml(presetLabel(state.voices[a.id].preset).toLowerCase())} voice</li>`).join("");
+      team.hidden = false;
+      cont.hidden = false;
+      cont.focus({ preventScroll: true });
+      cont.onclick = () => { launchOverlay.hidden = true; resolve(); };
     };
-    setTimeout(tick, 400);
+    setTimeout(tick, 350);
   });
 }
 
@@ -1387,10 +1527,23 @@ function runLaunchSequence() {
 btnBack.addEventListener("click", () => { if (state.step === 1 && state.painGroup) { backToMenu(); return; } if (state.step > 0) go(state.step - 1); });
 btnNext.addEventListener("click", async () => {
   if (btnNext.disabled) return;
+  // A Step 2 sub-screen never advances: it saves and returns to the full pain menu.
+  if (state.step === 1 && state.painGroup) { backToMenu(); return; }
+  if (state.step === 1 && !state.selectedSubs.length) return;
   if (state.step === 3) { btnNext.disabled = true; closePop(); launching = true; await runLaunchSequence(); launching = false; go(4); return; }
   if (state.step === 5) { toast("In a real pitch, this opens signup. Nice work!"); return; }
   go(state.step + 1);
 });
 
 history.replaceState({ step: 0, group: null }, "");
+/* ---------- Welcome splash ---------- */
+(() => {
+  const splash = document.getElementById("splash");
+  if (!splash) return;
+  document.getElementById("splash-name").textContent = BUSINESS_CONFIG.ownerFirstName;
+  document.getElementById("splash-biz").textContent = BUSINESS_CONFIG.name;
+  document.body.classList.add("splash-open");
+  const close = () => { splash.classList.add("gone"); document.body.classList.remove("splash-open"); setTimeout(() => { splash.hidden = true; }, 350); };
+  document.getElementById("splash-start").addEventListener("click", close);
+})();
 render();
