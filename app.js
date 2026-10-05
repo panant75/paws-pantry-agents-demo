@@ -15,31 +15,84 @@ const BUSINESS_CONFIG = {
 
 const STEP_LABELS = ["Welcome", "Pains", "Agents", "Setup", "Dashboard", "Summary"];
 
-const PAINS = [
-  { id: "stock", title: "Running out of stock / spoiled inventory", desc: "Shelves empty, food expires, suppliers chase you.", icon: "📦", color: "#FEF3C7", hours: 4, dollars: 420 },
-  { id: "replies", title: "Slow replies to customers", desc: "DMs and emails pile up while you're on the floor.", icon: "💬", color: "#DBEAFE", hours: 6, dollars: 280 },
-  { id: "churn", title: "Missed reorders & churned subscriptions", desc: "Subscribers quietly leave when boxes slip.", icon: "🔁", color: "#FCE8E2", hours: 3, dollars: 650 },
-  { id: "marketing", title: "Not enough time for marketing", desc: "Instagram and promos keep slipping to 'someday'.", icon: "📣", color: "#EDE9FE", hours: 5, dollars: 310 },
-  { id: "margins", title: "Unclear margins and pricing", desc: "Hard to see what's actually making money.", icon: "📊", color: "#DCFCE7", hours: 3, dollars: 480 },
-  { id: "delivery", title: "Delivery / fulfillment chaos", desc: "Routes, boxes, and 'where's my order?' overwhelm.", icon: "🚚", color: "#CCFBF1", hours: 5, dollars: 360 },
+/* Two-level, MECE pain structure. Hours/$ per sub-point are ILLUSTRATIVE weekly weights. */
+const PAIN_GROUPS = [
+  {
+    id: "acquire", short: "New customers", title: "I can't get enough new customers.", icon: "🧲", color: "#EDE9FE",
+    subs: [
+      { id: "acq_find", title: "I have no steady way to find and win new customers.", short: "No steady way to win new customers", hours: 3, dollars: 450, agents: ["growth"] },
+      { id: "acq_budget", title: "I don't know how to split my ads and social budget, or whether it's working.", short: "Unclear ad & social budget results", hours: 2, dollars: 300, agents: ["growth"] },
+      { id: "acq_time", title: "I don't have time to market consistently.", short: "No time to market consistently", hours: 4, dollars: 250, agents: ["growth"] },
+    ],
+    connectors: [{ id: "gads" }, { id: "meta" }, { id: "tiktok" }, { id: "gbp" }, { id: "klaviyo", label: "Klaviyo or Mailchimp" }],
+  },
+  {
+    id: "retain", short: "Losing customers", title: "I lose customers I already have.", icon: "🔁", color: "#FCE8E2",
+    subs: [
+      { id: "ret_slow", title: "I'm slow to reply to questions and complaints.", short: "Slow replies to questions & complaints", hours: 6, dollars: 280, agents: ["pal"] },
+      { id: "ret_drop", title: "Subscribers and regulars quietly drop off.", short: "Subscribers & regulars dropping off", hours: 3, dollars: 650, agents: ["orders"] },
+    ],
+    connectors: [{ id: "gmail" }, { id: "sms" }, { id: "igdm" }, { id: "recharge" }, { id: "klaviyo", label: "Klaviyo" }],
+  },
+  {
+    id: "ops", short: "Operations", title: "Day-to-day operations are chaos.", icon: "📦", color: "#FEF3C7",
+    subs: [
+      { id: "ops_stock", title: "I run out of best sellers or get stuck with stock that expires.", short: "Stockouts & expiring stock", hours: 4, dollars: 420, agents: ["pantry"] },
+      { id: "ops_ship", title: "Packing and delivery keep going wrong.", short: "Packing & delivery mistakes", hours: 5, dollars: 360, agents: ["ship"] },
+    ],
+    connectors: [{ id: "shopify", label: "Shopify or WooCommerce" }, { id: "square", label: "Square POS" }, { id: "supplier" }, { id: "shipstation" }],
+  },
+  {
+    id: "numbers", short: "Numbers", title: "I don't really know my numbers.", icon: "📊", color: "#DCFCE7",
+    subs: [
+      { id: "num_margin", title: "I don't know my margins or where the money goes.", short: "Unclear margins & money flow", hours: 3, dollars: 480, agents: ["cash"] },
+      { id: "num_data", title: "My data is spread across apps, so I never see the whole picture.", short: "Data scattered across apps", hours: 2, dollars: 150, agents: ["cash"] },
+    ],
+    connectors: [{ id: "quickbooks" }, { id: "stripe" }, { id: "square", label: "Square" }, { id: "shopify", label: "Shopify" }, { id: "sheets" }],
+  },
+  {
+    id: "stretched", short: "Stretched thin", title: "I'm stretched too thin to run it all.", icon: "⏳", color: "#CCFBF1",
+    subs: [
+      { id: "str_tools", title: "My tools don't talk to each other, and setting up new ones takes forever.", short: "Tools don't connect; setup is slow", hours: 3, dollars: 120, agents: ["captain"] },
+      { id: "str_decide", title: "I can't keep up with every decision.", short: "Can't keep up with every decision", hours: 4, dollars: 200, agents: ["captain"] },
+      { id: "str_trust", title: "I don't trust automation, so I check everything myself.", short: "Checking every automation myself", hours: 3, dollars: 100, agents: ["captain"] },
+    ],
+    connectors: [{ id: "approvals" }, { id: "gcal" }, { id: "gmail" }],
+  },
 ];
+const ALL_SUBS = PAIN_GROUPS.flatMap((g) => g.subs.map((s) => ({ ...s, group: g.id })));
+const AGENT_HOME_GROUP = { growth: "acquire", pal: "retain", orders: "retain", pantry: "ops", ship: "ops", cash: "numbers", captain: "stretched" };
+
+const CONNECTORS = {
+  gads: { name: "Google Ads", desc: "Search ad spend & results", initials: "GA", color: "#4285F4" },
+  meta: { name: "Meta (Facebook & Instagram)", desc: "Ads, posts & audiences", initials: "Me", color: "#0866FF" },
+  tiktok: { name: "TikTok", desc: "Short videos & ads", initials: "Tk", color: "#111111" },
+  gbp: { name: "Google Business Profile", desc: "Maps listing & reviews", initials: "GB", color: "#34A853" },
+  klaviyo: { name: "Klaviyo or Mailchimp", desc: "Email & SMS campaigns", initials: "Kl", color: "#232323" },
+  gmail: { name: "Gmail", desc: "Customer emails & replies", initials: "Gm", color: "#EA4335" },
+  sms: { name: "SMS (Twilio)", desc: "Text replies & alerts", initials: "Tw", color: "#F22F46" },
+  igdm: { name: "Instagram DMs", desc: "Customer messages", initials: "Ig", color: "#E1306C" },
+  recharge: { name: "Recharge (subscriptions)", desc: "Subscription skips & renewals", initials: "Rc", color: "#3901F1" },
+  shopify: { name: "Shopify or WooCommerce", desc: "Online orders & inventory", initials: "Sh", color: "#5E8E3E" },
+  square: { name: "Square POS", desc: "In-store sales & stock", initials: "Sq", color: "#006AFF" },
+  supplier: { name: "Supplier email / inventory", desc: "Reorders & price lists", initials: "Su", color: "#B45309" },
+  shipstation: { name: "ShipStation", desc: "Labels & delivery tracking", initials: "SS", color: "#6B8E23" },
+  quickbooks: { name: "QuickBooks", desc: "Costs, margins & expenses", initials: "QB", color: "#2CA01C" },
+  stripe: { name: "Stripe", desc: "Payments & payouts", initials: "St", color: "#635BFF" },
+  sheets: { name: "Google Sheets", desc: "Your existing spreadsheets", initials: "GS", color: "#0F9D58" },
+  approvals: { name: "Slack or text (one-tap approvals)", desc: "Approve from your phone", initials: "OK", color: "#4A154B" },
+  gcal: { name: "Google Calendar", desc: "Delivery & vendor days", initials: "Cal", color: "#4285F4" },
+};
+const DEFAULT_CONNECTED = ["gmail", "square", "gcal"];
 
 const AGENTS = [
-  { id: "captain", name: "Store Captain", role: "Your chief of staff", icon: "🧭", color: "#CCFBF1", desc: "Keeps the whole team coordinated and surfaces what needs your eye.", painIds: ["stock", "replies", "churn", "marketing", "margins", "delivery"], tasks: ["Morning briefing of what's urgent", "Routes work to the right agent", "Nags gently when approvals wait"], alwaysOn: true },
-  { id: "pal", name: "Customer Pal", role: "Customer care", icon: "🤝", color: "#DBEAFE", desc: "Answers common questions in your voice and flags the tricky ones.", painIds: ["replies"], tasks: ["Reply to FAQs in minutes", "Escalate upset messages to you", "Log requests for the team"] },
-  { id: "orders", name: "Order Desk", role: "Sales & subscriptions", icon: "🧾", color: "#FCE8E2", desc: "Watches subscriptions, nudges renewals, and catches churn early.", painIds: ["churn"], tasks: ["Flag at-risk subscribers", "Draft win-back notes", "Confirm upcoming renewals"] },
-  { id: "pantry", name: "Pantry Stock", role: "Inventory & suppliers", icon: "🥫", color: "#FEF3C7", desc: "Tracks low stock, drafts reorders, and watches for spoilage.", painIds: ["stock"], tasks: ["Draft supplier reorders", "Warn on near-expiry items", "Suggest safer order sizes"] },
-  { id: "cash", name: "Cash Sense", role: "Money & margins", icon: "💰", color: "#DCFCE7", desc: "Makes pricing and margin clarity feel simple, not spreadsheet hell.", painIds: ["margins"], tasks: ["Highlight low-margin items", "Compare weekly profit", "Suggest price tweaks"] },
-  { id: "growth", name: "Growth Spark", role: "Marketing & social", icon: "✨", color: "#EDE9FE", desc: "Drafts promos and posts so marketing happens without a second job.", painIds: ["marketing"], tasks: ["Draft weekend promos", "Suggest Instagram captions", "Plan a simple campaign"] },
-  { id: "ship", name: "Ship & Scoop", role: "Fulfillment & delivery", icon: "🐕", color: "#FFE4E6", desc: "Keeps delivery days tidy and customers informed without phone tag.", painIds: ["delivery"], tasks: ["Group same-block deliveries", "Send 'out for delivery' texts", "Flag address issues early"] },
-];
-
-const TOOLS = [
-  { id: "gmail", name: "Gmail", desc: "Customer emails & replies", color: "#EA4335", initials: "Gm", defaultOn: true },
-  { id: "pos", name: "Square / Shopify POS", desc: "Sales & inventory signal", color: "#006AFF", initials: "Sq", defaultOn: true },
-  { id: "ig", name: "Instagram", desc: "DMs and social posts", color: "#E1306C", initials: "Ig", defaultOn: false },
-  { id: "cal", name: "Google Calendar", desc: "Delivery & vendor days", color: "#4285F4", initials: "Cal", defaultOn: true },
-  { id: "qb", name: "QuickBooks", desc: "Margins & expenses", color: "#2CA01C", initials: "QB", defaultOn: false },
+  { id: "captain", name: "Store Captain", role: "Your chief of staff", icon: "🧭", color: "#CCFBF1", desc: "Keeps the whole team coordinated and surfaces what needs your eye.", tasks: ["Morning briefing of what's urgent", "Routes work to the right agent", "Nags gently when approvals wait"], alwaysOn: true },
+  { id: "pal", name: "Customer Pal", role: "Customer care", icon: "🤝", color: "#DBEAFE", desc: "Answers common questions in your voice and flags the tricky ones.", tasks: ["Reply to FAQs in minutes", "Escalate upset messages to you", "Log requests for the team"] },
+  { id: "orders", name: "Order Desk", role: "Sales & subscriptions", icon: "🧾", color: "#FCE8E2", desc: "Watches subscriptions, nudges renewals, and catches churn early.", tasks: ["Flag at-risk subscribers", "Draft win-back notes", "Confirm upcoming renewals"] },
+  { id: "pantry", name: "Pantry Stock", role: "Inventory & suppliers", icon: "🥫", color: "#FEF3C7", desc: "Tracks low stock, drafts reorders, and watches for spoilage.", tasks: ["Draft supplier reorders", "Warn on near-expiry items", "Suggest safer order sizes"] },
+  { id: "cash", name: "Cash Sense", role: "Money & margins", icon: "💰", color: "#DCFCE7", desc: "Makes pricing and margin clarity feel simple, not spreadsheet hell.", tasks: ["Highlight low-margin items", "Compare weekly profit", "Suggest price tweaks"] },
+  { id: "growth", name: "Growth Spark", role: "Marketing & social", icon: "✨", color: "#EDE9FE", desc: "Drafts promos and posts so marketing happens without a second job.", tasks: ["Draft weekend promos", "Suggest Instagram captions", "Plan a simple campaign"] },
+  { id: "ship", name: "Ship & Scoop", role: "Fulfillment & delivery", icon: "🐕", color: "#FFE4E6", desc: "Keeps delivery days tidy and customers informed without phone tag.", tasks: ["Group same-block deliveries", "Send 'out for delivery' texts", "Flag address issues early"] },
 ];
 
 const APPROVALS = [
@@ -162,7 +215,7 @@ const DEFAULT_INPUTS = (() => {
     "act.faq": 12, "act.expiry": 4, "act.renewals": 18, "act.deliveries": 7,
     "act.lowMargin": 2, "act.igDrafts": 3, "act.reorder": 3, "act.atRisk": 2,
   };
-  PAINS.forEach((p) => { o[`painHours.${p.id}`] = p.hours; o[`painDollars.${p.id}`] = p.dollars; });
+  ALL_SUBS.forEach((p) => { o[`subHours.${p.id}`] = p.hours; o[`subDollars.${p.id}`] = p.dollars; });
   return o;
 })();
 
@@ -172,7 +225,9 @@ function freshState() {
   Object.assign(state, {
     step: 0,
     business: { name: BUSINESS_CONFIG.name, type: BUSINESS_CONFIG.type, size: BUSINESS_CONFIG.size },
-    selectedPains: [],
+    selectedSubs: [],
+    painGroup: null,
+    showMore: false,
     agentsOn: {},
     _agentsTouched: false,
     tools: {},
@@ -184,15 +239,18 @@ function freshState() {
     overrides: {},
     editedAt: {},
   });
-  TOOLS.forEach((t) => { state.tools[t.id] = t.defaultOn; });
+  Object.keys(CONNECTORS).forEach((id) => { state.tools[id] = DEFAULT_CONNECTED.includes(id); });
   AGENTS.forEach((a) => { state.voices[a.id] = defaultVoice(a.id); });
 }
 freshState();
 
 /* ---------- Helpers ---------- */
-const pain = (id) => PAINS.find((p) => p.id === id);
+const groupById = (id) => PAIN_GROUPS.find((g) => g.id === id);
+const subById = (id) => ALL_SUBS.find((s) => s.id === id);
+const subSel = (id) => state.selectedSubs.find((s) => s.id === id);
+const countIn = (g) => g.subs.filter((s) => subSel(s.id)).length;
+const selectedGroups = () => PAIN_GROUPS.filter((g) => countIn(g) > 0);
 const agentById = (id) => AGENTS.find((a) => a.id === id);
-const painShort = (p) => p.title.split("/")[0].trim();
 const sevFactor = (s) => 0.6 + 0.2 * s;
 const inp = (k) => Number(state.inputs[k]);
 function escapeHtml(str) {
@@ -226,27 +284,27 @@ function countDP(key, label, source, formula) {
 const DP = {
   hoursLost: {
     label: "Hours lost / week", kind: "hours",
-    source: "Estimate · your ranked pains × typical weekly hours for a shop your size",
+    source: "Estimate · the problems you picked × typical weekly hours for a shop your size",
     formula: "Σ (typical hours/week × severity factor). Severity factor = 0.6 + 0.2 × severity (1–5).",
-    inputs: () => state.selectedPains.map((s) => ({ key: `painHours.${s.id}`, label: `${painShort(pain(s.id))} · typical hrs/week`, unit: "hrs" })),
-    breakdown: () => state.selectedPains.map((s) => {
-      const h = inp(`painHours.${s.id}`); const f = sevFactor(s.severity);
-      return `${painShort(pain(s.id))}: ${h}h × ${f.toFixed(1)} = ${Math.round(h * f)}h`;
+    inputs: () => state.selectedSubs.map((s) => ({ key: `subHours.${s.id}`, label: `${subById(s.id).short} · typical hrs/week`, unit: "hrs" })),
+    breakdown: () => state.selectedSubs.map((s) => {
+      const h = inp(`subHours.${s.id}`); const f = sevFactor(s.severity);
+      return `${subById(s.id).short}: ${h}h × ${f.toFixed(1)} = ${Math.round(h * f)}h`;
     }),
-    compute: () => state.selectedPains.reduce((a, s) => a + Math.round(inp(`painHours.${s.id}`) * sevFactor(s.severity)), 0),
-    updated: "Live · recalculates as you rank",
+    compute: () => state.selectedSubs.reduce((a, s) => a + Math.round(inp(`subHours.${s.id}`) * sevFactor(s.severity)), 0),
+    updated: "Live · recalculates as you pick",
   },
   dollarsAtStake: {
     label: "$ at stake / week", kind: "money",
-    source: "Estimate · your ranked pains × typical weekly $ impact (lost sales, spoilage, churn)",
+    source: "Estimate · the problems you picked × typical weekly $ impact (lost sales, spoilage, churn)",
     formula: "Σ (typical $/week × severity factor). Severity factor = 0.6 + 0.2 × severity (1–5).",
-    inputs: () => state.selectedPains.map((s) => ({ key: `painDollars.${s.id}`, label: `${painShort(pain(s.id))} · typical $/week`, unit: "$" })),
-    breakdown: () => state.selectedPains.map((s) => {
-      const d = inp(`painDollars.${s.id}`); const f = sevFactor(s.severity);
-      return `${painShort(pain(s.id))}: $${d} × ${f.toFixed(1)} = $${Math.round(d * f)}`;
+    inputs: () => state.selectedSubs.map((s) => ({ key: `subDollars.${s.id}`, label: `${subById(s.id).short} · typical $/week`, unit: "$" })),
+    breakdown: () => state.selectedSubs.map((s) => {
+      const d = inp(`subDollars.${s.id}`); const f = sevFactor(s.severity);
+      return `${subById(s.id).short}: $${d} × ${f.toFixed(1)} = $${Math.round(d * f)}`;
     }),
-    compute: () => state.selectedPains.reduce((a, s) => a + Math.round(inp(`painDollars.${s.id}`) * sevFactor(s.severity)), 0),
-    updated: "Live · recalculates as you rank",
+    compute: () => state.selectedSubs.reduce((a, s) => a + Math.round(inp(`subDollars.${s.id}`) * sevFactor(s.severity)), 0),
+    updated: "Live · recalculates as you pick",
   },
   revenue: {
     label: "Revenue (week)", kind: "money",
@@ -289,17 +347,17 @@ const DP = {
     compute: () => Math.round((val("dollarsAtStake") * inp("protectRate")) / 100),
     updated: "Illustrative · recalculates live",
   },
-  act_faq: countDP("act.faq", "Customer questions answered", "Gmail + Instagram DMs · Mon–Fri", "Count of conversations Customer Pal replied to this week"),
+  act_faq: countDP("act.faq", "Customer questions answered", "Gmail + Instagram DMs + SMS · Mon–Fri", "Count of conversations Customer Pal replied to this week"),
   act_expiry: countDP("act.expiry", "Near-expiry items flagged", "Square inventory · expiry dates on file", "Items expiring within 14 days"),
-  act_renewals: countDP("act.renewals", "Subscription renewals confirmed", "Square subscriptions · this week", "Renewals confirmed without a manual check"),
+  act_renewals: countDP("act.renewals", "Subscription renewals confirmed", "Recharge subscriptions · this week", "Renewals confirmed without a manual check"),
   act_deliveries: countDP("act.deliveries", "Same-block deliveries grouped", "Google Calendar · delivery slots", "Deliveries combined into shared routes"),
   act_lowMargin: countDP("act.lowMargin", "Low-margin items flagged", "QuickBooks costs + POS prices", "Items whose margin fell below your 30% target"),
   act_igDrafts: countDP("act.igDrafts", "Instagram drafts queued", "Growth Spark drafts · awaiting review", "Posts drafted and waiting for your OK"),
   act_reorder: countDP("act.reorder", "Low-stock items in reorder", "Square inventory · below reorder point", "Items at or below their reorder point"),
   act_atRisk: countDP("act.atRisk", "Subscriptions at risk", "Subscription activity · skips & 'pause' clicks", "Subscribers with 2+ skips or pause clicks in 30 days"),
-  sel_pains: { label: "Pains ranked", kind: "count", source: "Your choices in Step 2", formula: "Number of pain cards you ranked", compute: () => state.selectedPains.length, jump: 1, updated: "Live" },
+  sel_pains: { label: "Problems picked", kind: "count", source: "Your choices in Step 2", formula: "Sub-problems you picked across the 5 pain areas", compute: () => state.selectedSubs.length, jump: 1, updated: "Live" },
   sel_agents: { label: "Agents on team", kind: "count", source: "Your choices in Step 3", formula: "Agents toggled on", compute: () => activeAgents().length, jump: 2, updated: "Live" },
-  sel_tools: { label: "Tools connected", kind: "count", source: "Your choices in Step 4 (mock connections)", formula: "Tools toggled to Connected", compute: () => Object.values(state.tools).filter(Boolean).length, jump: 3, updated: "Live" },
+  sel_tools: { label: "Tools connected", kind: "count", source: "Your choices in Step 4 (mock connections)", formula: "Connectors toggled to Connected (all groups + More connectors)", compute: () => Object.values(state.tools).filter(Boolean).length, jump: 3, updated: "Live" },
 };
 
 function val(id) {
@@ -319,9 +377,8 @@ function chip(id) {
 
 /* ---------- Agents ---------- */
 function recommendedAgents() {
-  const painSet = new Set(state.selectedPains.map((p) => p.id));
   const ids = new Set(["captain"]);
-  AGENTS.forEach((a) => { if (a.alwaysOn || a.painIds.some((pid) => painSet.has(pid))) ids.add(a.id); });
+  state.selectedSubs.forEach((s) => subById(s.id).agents.forEach((a) => ids.add(a)));
   return ids;
 }
 function activeAgents() { return AGENTS.filter((a) => state.agentsOn[a.id]); }
@@ -581,14 +638,16 @@ function renderProgress() {
 function setNav() {
   btnBack.disabled = state.step === 0;
   btnBack.style.visibility = state.step === 0 ? "hidden" : "visible";
+  btnBack.textContent = state.step === 1 && state.painGroup ? "All pain points" : "Back";
   const labels = { 3: "Launch my team", 4: "See summary", 5: "Get started" };
   btnNext.textContent = labels[state.step] || "Next";
   btnNext.classList.toggle("btn-launch", state.step === 3);
   let ok = true; let hint = "";
   if (state.step === 0) ok = !!(state.business.name.trim() && state.business.type && state.business.size);
   else if (state.step === 1) {
-    ok = state.selectedPains.length >= 1;
-    hint = state.selectedPains.length ? `${state.selectedPains.length} of 3 ranked · tap ⓘ to see the math` : "Pick at least 1 pain (up to 3)";
+    const n = state.selectedSubs.length;
+    ok = n >= 1;
+    hint = n ? `${n} problem${n === 1 ? "" : "s"} picked · tap ⓘ to see the math` : "Tap a pain area to pick what applies";
   } else if (state.step === 2) { ok = activeAgents().length >= 1; hint = `${activeAgents().length} agents · each with its own voice`; }
   else if (state.step === 3) hint = "Mock connections · nothing leaves this demo";
   else if (state.step === 4) hint = "Sample data · tap ⓘ on any number";
@@ -596,9 +655,7 @@ function setNav() {
   navHint.textContent = hint;
 }
 
-function go(step) {
-  document.querySelector(".toast")?.classList.remove("show");
-  state.step = Math.max(0, Math.min(STEP_LABELS.length - 1, step));
+function enterStep() {
   if (state.step === 2) {
     const rec = recommendedAgents();
     AGENTS.forEach((a) => {
@@ -610,9 +667,58 @@ function go(step) {
       state.openVoice.add(first.id);
     }
   }
-  render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+function go(step, opts = {}) {
+  document.querySelector(".toast")?.classList.remove("show");
+  closePop();
+  state.step = Math.max(0, Math.min(STEP_LABELS.length - 1, step));
+  if (!(opts.keepGroup && state.step === 1)) state.painGroup = null;
+  enterStep();
+  if (!opts.fromHistory) history.pushState({ step: state.step, group: state.painGroup }, "");
+  render();
+  window.scrollTo({ top: 0, behavior: opts.fromHistory ? "auto" : "smooth" });
+}
+
+/* Drill into a pain area (its own history entry so browser/Android back returns to the menu). */
+function openGroup(id) {
+  closePop();
+  state.painGroup = id;
+  history.pushState({ step: 1, group: id }, "");
+  render();
+  window.scrollTo(0, 0);
+}
+function backToMenu() {
+  if (state.step !== 1 || !state.painGroup) return;
+  if (history.state && history.state.step === 1 && history.state.group) { history.back(); return; }
+  state.painGroup = null;
+  history.replaceState({ step: 1, group: null }, "");
+  render();
+  window.scrollTo(0, 0);
+}
+let launching = false;
+window.addEventListener("popstate", (e) => {
+  const s = e.state;
+  if (launching || !s || typeof s.step !== "number") return;
+  state.painGroup = s.group || null;
+  go(s.step, { fromHistory: true, keepGroup: true });
+});
+
+/* Swipe right on a sub-screen to return to the main pain menu. */
+let touch0 = null;
+document.addEventListener("touchstart", (e) => {
+  touch0 = null;
+  if (state.step !== 1 || !state.painGroup || e.touches.length !== 1) return;
+  if (e.target.closest('input[type="range"], .popover')) return;
+  touch0 = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!touch0) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touch0.x; const dy = t.clientY - touch0.y; const dt = Date.now() - touch0.t;
+  touch0 = null;
+  if (dx > 80 && Math.abs(dy) < 60 && dt < 900) backToMenu();
+}, { passive: true });
 
 function render(opts = {}) {
   closePop();
@@ -672,51 +778,107 @@ function renderWelcome() {
 }
 
 function tallyListHTML() {
-  return state.selectedPains.map((sel, i) => `<li><span>#${i + 1} ${escapeHtml(painShort(pain(sel.id)))}</span><span>${sel.severity}/5</span></li>`).join("")
-    || "<li style='color:var(--muted)'>No pains ranked yet</li>";
+  return selectedGroups().map((g) => `<li><span>${g.icon} ${escapeHtml(g.short)}</span><span>${countIn(g)} picked</span></li>`).join("")
+    || "<li style='color:var(--muted)'>Nothing picked yet</li>";
+}
+function tallyHTML() {
+  return `
+      <aside class="tally-card" id="tally-card">
+        <h3>At stake each week</h3>
+        <p class="tally-note">Illustrative estimates from the problems you pick. Not a quote or guarantee.</p>
+        <div class="tally-metrics">
+          <div class="tally-metric">
+            <div class="label">Hours lost / week ${chip("hoursLost")}</div>
+            <div class="value" id="tally-hours">${Math.round(val("hoursLost"))}</div>
+            <div class="unit">illustrative</div>
+          </div>
+          <div class="tally-metric money">
+            <div class="label">$ at stake / week ${chip("dollarsAtStake")}</div>
+            <div class="value" id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</div>
+            <div class="unit">illustrative</div>
+          </div>
+        </div>
+        <ul class="tally-selected" id="tally-list">${tallyListHTML()}</ul>
+      </aside>`;
 }
 
 function renderPains() {
-  const selectedIds = state.selectedPains.map((p) => p.id);
+  const g = state.painGroup && groupById(state.painGroup);
+  return g ? renderPainGroup(g) : renderPainMenu();
+}
+
+function renderPainMenu() {
   return `
     <div class="screen-eyebrow">Step 2 · Pain-point discovery</div>
     <h1 class="screen-title">Where does ${escapeHtml(state.business.name)} feel the pinch?</h1>
-    <p class="screen-sub">Tap up to 3. Rank order matters: your first tap is #1. Nudge the severity slider on each pick. The totals update live and are <strong>illustrative estimates</strong>. Tap ⓘ to see or correct the math.</p>
+    <p class="screen-sub">Tap an area to see what's inside. Pick what applies and set how much it hurts. The totals are <strong>illustrative estimates</strong>.</p>
     <div class="pain-layout">
-      <div class="card-grid" id="pain-grid">
-        ${PAINS.map((p) => {
-          const idx = selectedIds.indexOf(p.id);
-          const selected = idx >= 0;
-          const sev = selected ? state.selectedPains[idx].severity : 3;
+      <div class="group-list" id="group-list">
+        ${PAIN_GROUPS.map((g) => {
+          const n = countIn(g);
           return `
-            <div class="pain-card ${selected ? "selected" : ""}" data-pain="${p.id}" role="button" tabindex="0" aria-pressed="${selected}">
-              ${selected ? `<span class="rank-badge">${idx + 1}</span>` : ""}
-              <div class="pain-icon" style="background:${p.color}">${p.icon}</div>
-              <h3>${escapeHtml(p.title)}</h3>
-              <p>${escapeHtml(p.desc)}</p>
-              <div class="severity" data-stop>
-                <label>Severity</label>
-                <input type="range" min="1" max="5" value="${sev}" data-sev="${p.id}" ${selected ? "" : "disabled"} aria-label="Severity for ${escapeHtml(p.title)}" />
-                <span class="severity-val">${sev}/5</span>
-              </div>
-            </div>`;
+          <button type="button" class="group-card ${n ? "selected" : ""}" data-group="${g.id}" aria-label="${escapeHtml(g.title)}${n ? ` (${n} selected)` : ""}">
+            <span class="group-icon" style="background:${g.color}">${g.icon}${n ? `<span class="group-check" aria-hidden="true">✓</span>` : ""}</span>
+            <span class="group-text">
+              <span class="group-title">${escapeHtml(g.title)}</span>
+              <span class="group-meta">${g.subs.length} problems inside${n ? "" : " · tap to pick"}</span>
+            </span>
+            ${n ? `<span class="group-badge">${n} selected</span>` : ""}
+            <span class="group-chev" aria-hidden="true">›</span>
+          </button>`;
         }).join("")}
       </div>
-      <aside class="tally-card" id="tally-card">
-        <h3>At stake each week</h3>
-        <p class="tally-note">Illustrative estimates based on your selections, not a quote or guarantee.</p>
-        <div class="tally-metric">
-          <div class="label">Hours lost / week ${chip("hoursLost")}</div>
-          <div class="value" id="tally-hours">${Math.round(val("hoursLost"))}</div>
-          <div class="unit">illustrative</div>
+      ${tallyHTML()}
+    </div>`;
+}
+
+function renderPainGroup(g) {
+  const agents = [...new Set(g.subs.flatMap((s) => s.agents))].map(agentById);
+  return `
+    <div class="sub-top">
+      <button type="button" class="btn btn-soft btn-sm back-menu" data-back-menu>← Back to all pain points</button>
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <button type="button" class="crumb-link" data-back-menu>All pain points</button>
+        <span class="crumb-sep" aria-hidden="true">›</span>
+        <span aria-current="page">${escapeHtml(g.short)}</span>
+      </nav>
+    </div>
+    <h1 class="screen-title group-heading"><span class="group-icon sm" style="background:${g.color}" aria-hidden="true">${g.icon}</span><span>${escapeHtml(g.title)}</span></h1>
+    <p class="screen-sub">Pick what applies and set how much it hurts. Tap “Back to all pain points” (or swipe right on a phone) when you’re done.</p>
+    <div class="pain-layout">
+      <div class="sub-col">
+        <div class="sub-list" id="sub-list">
+          ${g.subs.map((s) => {
+            const sel = subSel(s.id);
+            return `
+            <div class="sub-item ${sel ? "selected" : ""}" data-sub="${s.id}">
+              <button type="button" class="sub-toggle" role="checkbox" aria-checked="${!!sel}" data-sub-toggle="${s.id}">
+                <span class="sub-box" aria-hidden="true">${sel ? "✓" : ""}</span>
+                <span class="sub-title">${escapeHtml(s.title)}</span>
+              </button>
+              ${sel ? `
+              <div class="severity sub-sev">
+                <label for="sev-${s.id}">How much it hurts</label>
+                <input id="sev-${s.id}" type="range" min="1" max="5" value="${sel.severity}" data-sev="${s.id}" />
+                <span class="severity-val">${sel.severity}/5</span>
+              </div>` : ""}
+            </div>`;
+          }).join("")}
         </div>
-        <div class="tally-metric money">
-          <div class="label">$ at stake / week ${chip("dollarsAtStake")}</div>
-          <div class="value" id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</div>
-          <div class="unit">illustrative</div>
-        </div>
-        <ul class="tally-selected" id="tally-list">${tallyListHTML()}</ul>
-      </aside>
+        <section class="connectors-box" aria-label="Suggested connectors">
+          <h3>Suggested connectors</h3>
+          <p class="hint">What your agents would plug into for this. You'll connect them (mock) in Step 4.</p>
+          <div class="conn-chips">
+            ${g.connectors.map((c) => {
+              const k = CONNECTORS[c.id];
+              return `<span class="conn-chip"><span class="conn-logo" style="background:${k.color}">${k.initials}</span>${escapeHtml(c.label || k.name)}</span>`;
+            }).join("")}
+          </div>
+          <p class="conn-agents">Agents for this: ${agents.map((a) => `${a.icon} ${escapeHtml(a.name)}`).join(" · ")}</p>
+        </section>
+        <button type="button" class="btn btn-primary back-menu-bottom" data-back-menu>← Back to all pain points</button>
+      </div>
+      ${tallyHTML()}
     </div>`;
 }
 
@@ -763,9 +925,9 @@ function voicePanelHTML(a) {
 function agentCardHTML(a, rec) {
   const on = !!state.agentsOn[a.id];
   const isRec = rec.has(a.id);
-  const painLabel = a.painIds.map(pain).filter(Boolean)
-    .filter((p) => state.selectedPains.some((s) => s.id === p.id))
-    .map(painShort).slice(0, 2).join(" · ") || (a.alwaysOn ? "Coordinates the whole team" : "Optional add-on");
+  const painLabel = selectedGroups()
+    .filter((g) => g.subs.some((s) => subSel(s.id) && s.agents.includes(a.id)))
+    .map((g) => g.short).join(" · ") || (a.alwaysOn ? "Coordinates the whole team" : "Optional add-on");
   return `
     <div class="agent-card ${on ? "on" : ""} ${isRec ? "recommended" : ""}" data-agent="${a.id}">
       <div class="agent-top">
@@ -789,8 +951,48 @@ function renderAgents() {
   return `
     <div class="screen-eyebrow">Step 3 · Recommended agent team</div>
     <h1 class="screen-title">Meet the crew for ${escapeHtml(state.business.name)}</h1>
-    <p class="screen-sub">Based on your top pains, we pre-selected a lean team. Toggle anyone on or off (Store Captain stays on to coordinate), and give each agent its own voice.</p>
+    <p class="screen-sub">Based on the problems you picked (${escapeHtml(selectedGroups().map((g) => g.short).join(", ") || "none yet")}), we pre-selected a lean team. Toggle anyone on or off (Store Captain stays on to coordinate), and give each agent its own voice.</p>
     <div class="agent-grid" id="agent-grid">${AGENTS.map((a) => agentCardHTML(a, rec)).join("")}</div>`;
+}
+
+function toolRowHTML(id, note) {
+  const k = CONNECTORS[id];
+  const on = !!state.tools[id];
+  return `
+              <div class="tool-row ${on ? "connected" : ""}" data-tool="${id}">
+                <div class="tool-icon" style="background:${k.color}">${k.initials}</div>
+                <div class="tool-info"><strong>${escapeHtml(k.name)}</strong><span>${escapeHtml(note || k.desc)}</span></div>
+                <span class="tool-status">${on ? "Connected" : "Not connected"}</span>
+                <button type="button" class="btn btn-sm ${on ? "btn-ghost" : "btn-soft"}" data-tool-btn="${id}" aria-label="${on ? "Disconnect" : "Connect"} ${escapeHtml(k.name)}">${on ? "Disconnect" : "Connect"}</button>
+              </div>`;
+}
+function connectorsHTML() {
+  const groups = selectedGroups();
+  const shown = new Set();
+  const sections = groups.map((g) => {
+    const rows = g.connectors.map((c) => {
+      if (shown.has(c.id)) {
+        return "";
+      }
+      shown.add(c.id);
+      const also = groups.filter((o) => o.id !== g.id && o.connectors.some((x) => x.id === c.id)).map((o) => o.short);
+      return toolRowHTML(c.id, also.length ? `${CONNECTORS[c.id].desc} · also for ${also.join(", ")}` : "");
+    }).join("");
+    if (!rows) return "";
+    return `
+          <div class="conn-group" data-conn-group="${g.id}">
+            <h4 class="conn-group-head"><span class="group-icon xs" style="background:${g.color}" aria-hidden="true">${g.icon}</span>For “${escapeHtml(g.short)}”</h4>
+            <div class="tool-list">${rows}</div>
+          </div>`;
+  }).join("");
+  const rest = Object.keys(CONNECTORS).filter((id) => !shown.has(id));
+  return `
+        ${sections || `<p class="hint">No pain areas picked yet. Every connector is listed below.</p>`}
+        ${rest.length ? `
+        <div class="more-conn">
+          <button type="button" class="btn btn-ghost btn-sm more-toggle" data-more-toggle aria-expanded="${!!state.showMore || !sections}">${state.showMore || !sections ? "Hide" : "Show"} more connectors (${rest.length})</button>
+          ${state.showMore || !sections ? `<div class="conn-group" data-conn-group="more"><h4 class="conn-group-head">More connectors</h4><div class="tool-list">${rest.map((id) => toolRowHTML(id)).join("")}</div></div>` : ""}
+        </div>` : ""}`;
 }
 
 function renderSetup() {
@@ -802,19 +1004,8 @@ function renderSetup() {
     <div class="setup-grid">
       <section class="setup-section">
         <h3>Connect the tools you already use</h3>
-        <p class="hint">Illustrative connections for the demo walkthrough.</p>
-        <div class="tool-list" id="tool-list">
-          ${TOOLS.map((t) => {
-            const on = !!state.tools[t.id];
-            return `
-              <div class="tool-row ${on ? "connected" : ""}" data-tool="${t.id}">
-                <div class="tool-icon" style="background:${t.color}">${t.initials}</div>
-                <div class="tool-info"><strong>${escapeHtml(t.name)}</strong><span>${escapeHtml(t.desc)}</span></div>
-                <span class="tool-status">${on ? "Connected" : "Not connected"}</span>
-                <button type="button" class="btn btn-sm ${on ? "btn-ghost" : "btn-soft"}" data-tool-btn="${t.id}">${on ? "Disconnect" : "Connect"}</button>
-              </div>`;
-          }).join("")}
-        </div>
+        <p class="hint">Only what your picked pains need, grouped by pain. Illustrative connections for the demo walkthrough.</p>
+        <div id="connectors">${connectorsHTML()}</div>
       </section>
 
       <section class="setup-section" id="voice-summary">
@@ -850,14 +1041,26 @@ function renderSetup() {
     </div>`;
 }
 
+/* Which picked pain area an agent's work belongs to (for "For: …" tags on Step 5). */
+function agentGroup(agentId) {
+  const picked = selectedGroups().find((g) => g.subs.some((s) => subSel(s.id) && s.agents.includes(agentId)));
+  return picked || groupById(AGENT_HOME_GROUP[agentId]);
+}
+function forTag(agentId) {
+  const g = agentGroup(agentId);
+  return g ? `<span class="for-tag">For: ${g.icon} ${escapeHtml(g.short)}</span>` : "";
+}
+
 function sampleApprovals() {
   const items = [];
   if (state.agentsOn.pantry) items.push({ id: "a1", agentId: "pantry", title: `Drafted reorder for ${val("act_reorder")} low-stock items`, dp: "act_reorder", body: "Grain-free kibble, salmon treats, and dental chews. Waiting for your OK before it goes to the supplier." });
   if (state.agentsOn.orders) items.push({ id: "a2", agentId: "orders", title: `Flagged ${val("act_atRisk")} subscriptions at risk`, dp: "act_atRisk", body: "Maya R. skipped twice; Jordan P. clicked 'pause' three times. Win-back notes are drafted." });
-  if (state.agentsOn.growth) items.push({ id: "a3", agentId: "growth", title: "Suggested a weekend promo", body: "Fill-a-bowl Friday: 15% off subscription add-ons. The Instagram caption is drafted." });
+  if (state.agentsOn.growth) items.push({ id: "a3", agentId: "growth", title: "Suggested a weekend promo", body: "Fill-a-bowl Friday: 15% off for first-time customers, split 60/40 Instagram vs. Google. Caption and budget split drafted." });
   if (state.agentsOn.pal) items.push({ id: "a4", agentId: "pal", title: "A sensitive reply needs your touch", body: "A customer is upset about a late delivery. The reply is drafted; a personal note from you is recommended." });
-  if (!items.length) items.push({ id: "a0", agentId: "captain", title: "Morning briefing ready", body: "Store Captain summarized today's priorities." });
-  return items.slice(0, 4);
+  if (state.agentsOn.ship) items.push({ id: "a5", agentId: "ship", title: "Fixed a packing mix-up before it shipped", body: "Order #1042 had the wrong kibble size. A corrected label is ready in ShipStation for your OK." });
+  if (state.agentsOn.cash) items.push({ id: "a6", agentId: "cash", title: "Weekly margin check is ready", body: "Treats are your best margin; delivery fees are eating 6%. One spreadsheet-free summary from QuickBooks + Square." });
+  items.push({ id: "a0", agentId: "captain", title: "3 small decisions batched for one tap", body: "Store Captain grouped today's routine calls so you approve once instead of checking each automation." });
+  return items.slice(0, 5);
 }
 
 function sampleFeed() {
@@ -885,7 +1088,7 @@ function renderDashboard() {
       <div>
         <div class="screen-eyebrow">Step 5 · Day-one dashboard</div>
         <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
-        <p class="screen-sub" style="margin-bottom:0">A sample look at what your agents already handled, and what still needs your OK.</p>
+        <p class="screen-sub" style="margin-bottom:0">A sample look at what your agents already handled, and what still needs your OK.${selectedGroups().length ? ` Working on: <strong>${escapeHtml(selectedGroups().map((g) => g.short).join(" · "))}</strong>.` : ""}</p>
       </div>
       <span class="sample-pill">⚑ Sample data · tap ⓘ for sources</span>
     </div>
@@ -934,7 +1137,7 @@ function renderDashboard() {
                   <div class="mini-avatar" style="background:${agent.color}">${agent.icon}</div>
                   <div class="approval-body">
                     <strong>${escapeHtml(agent.name)} · ${escapeHtml(item.title)}${item.dp ? chip(item.dp) : ""}</strong>
-                    <p>${escapeHtml(item.body)}</p>
+                    ${forTag(item.agentId)}<p>${escapeHtml(item.body)}</p>
                     <div class="draft">
                       <div class="draft-head"><span>Draft · ${escapeHtml(VOICE_LINES[item.agentId].context)}</span><span class="voice-tag">${escapeHtml(presetLabel(v.preset))} voice</span></div>
                       <div class="draft-text">${escapeHtml(voiceMessage(item.agentId))}</div>
@@ -962,6 +1165,7 @@ function renderDashboard() {
                 <div class="feed-body">
                   <strong>${escapeHtml(agent.name)}</strong>
                   <p>${escapeHtml(f.text)}${f.dp ? chip(f.dp) : ""}</p>
+                  ${forTag(f.agentId)}
                   ${f.voice ? `<span class="voice-tag">${escapeHtml(presetLabel(state.voices[f.agentId].preset))} voice</span>` : ""}
                 </div>
                 <div class="feed-time">${f.time}</div>
@@ -973,7 +1177,7 @@ function renderDashboard() {
 }
 
 function renderClosing() {
-  const pains = state.selectedPains.map((s) => pain(s.id)).filter(Boolean);
+  const pains = selectedGroups();
   const agents = activeAgents();
   return `
     <div class="close-wrap">
@@ -983,8 +1187,8 @@ function renderClosing() {
       <div class="close-card">
         <div class="summary-path">
           <div class="summary-box">
-            <h4>Pains</h4>
-            <ul>${pains.map((p) => `<li>${p.icon} ${escapeHtml(painShort(p))}</li>`).join("") || "<li>None selected</li>"}</ul>
+            <h4>Pain areas</h4>
+            <ul>${pains.map((g) => `<li>${g.icon} ${escapeHtml(g.short)} <span class="voice-tag">${countIn(g)} picked</span></li>`).join("") || "<li>None selected</li>"}</ul>
           </div>
           <div class="summary-arrow" aria-hidden="true">→</div>
           <div class="summary-box">
@@ -1002,7 +1206,7 @@ function renderClosing() {
           </div>
         </div>
         <div class="impact-row">
-          <div class="impact-tile"><div class="n">${pains.length || "—"} ${chip("sel_pains")}</div><div class="l">Pains ranked</div></div>
+          <div class="impact-tile"><div class="n">${val("sel_pains") || "—"} ${chip("sel_pains")}</div><div class="l">Problems picked</div></div>
           <div class="impact-tile"><div class="n">${agents.length} ${chip("sel_agents")}</div><div class="l">Agents on team</div></div>
           <div class="impact-tile"><div class="n">${val("sel_tools")} ${chip("sel_tools")}</div><div class="l">Tools connected</div></div>
         </div>
@@ -1035,29 +1239,23 @@ function bindScreen() {
   }
 
   if (state.step === 1) {
-    const grid = document.getElementById("pain-grid");
-    const togglePain = (card) => {
-      const id = card.dataset.pain;
-      const idx = state.selectedPains.findIndex((p) => p.id === id);
-      if (idx >= 0) state.selectedPains.splice(idx, 1);
-      else {
-        if (state.selectedPains.length >= 3) { toast("Rank your top 3 only. Deselect one first."); return; }
-        state.selectedPains.push({ id, severity: 3 });
-      }
+    document.getElementById("group-list")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-group]"); if (b) openGroup(b.dataset.group);
+    });
+    stage.querySelectorAll("[data-back-menu]").forEach((b) => b.addEventListener("click", backToMenu));
+    const list = document.getElementById("sub-list");
+    list?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-sub-toggle]"); if (!b) return;
+      const id = b.dataset.subToggle;
+      const idx = state.selectedSubs.findIndex((s) => s.id === id);
+      if (idx >= 0) state.selectedSubs.splice(idx, 1); else state.selectedSubs.push({ id, severity: 3 });
       state._agentsTouched = false;
       AGENTS.forEach((a) => { if (!a.alwaysOn) delete state.agentsOn[a.id]; });
       render({ keepScroll: true });
-    };
-    grid?.addEventListener("click", (e) => {
-      if (e.target.closest("[data-stop]")) return;
-      const card = e.target.closest("[data-pain]"); if (card) togglePain(card);
     });
-    grid?.addEventListener("keydown", (e) => {
-      if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-pain]")) { e.preventDefault(); togglePain(e.target); }
-    });
-    grid?.addEventListener("input", (e) => {
+    list?.addEventListener("input", (e) => {
       const input = e.target.closest("[data-sev]"); if (!input) return;
-      const sel = state.selectedPains.find((p) => p.id === input.dataset.sev); if (!sel) return;
+      const sel = subSel(input.dataset.sev); if (!sel) return;
       sel.severity = Number(input.value);
       input.parentElement.querySelector(".severity-val").textContent = `${sel.severity}/5`;
       updateTallyLive();
@@ -1105,7 +1303,8 @@ function bindScreen() {
   }
 
   if (state.step === 3) {
-    document.getElementById("tool-list")?.addEventListener("click", (e) => {
+    document.getElementById("connectors")?.addEventListener("click", (e) => {
+      if (e.target.closest("[data-more-toggle]")) { state.showMore = !state.showMore; render({ keepScroll: true }); return; }
       const b = e.target.closest("[data-tool-btn]"); if (!b) return; state.tools[b.dataset.toolBtn] = !state.tools[b.dataset.toolBtn]; render({ keepScroll: true });
     });
     document.getElementById("voice-summary")?.addEventListener("click", (e) => {
@@ -1185,12 +1384,13 @@ function runLaunchSequence() {
 }
 
 /* ---------- Nav events ---------- */
-btnBack.addEventListener("click", () => { if (state.step > 0) go(state.step - 1); });
+btnBack.addEventListener("click", () => { if (state.step === 1 && state.painGroup) { backToMenu(); return; } if (state.step > 0) go(state.step - 1); });
 btnNext.addEventListener("click", async () => {
   if (btnNext.disabled) return;
-  if (state.step === 3) { btnNext.disabled = true; closePop(); await runLaunchSequence(); go(4); return; }
+  if (state.step === 3) { btnNext.disabled = true; closePop(); launching = true; await runLaunchSequence(); launching = false; go(4); return; }
   if (state.step === 5) { toast("In a real pitch, this opens signup. Nice work!"); return; }
   go(state.step + 1);
 });
 
+history.replaceState({ step: 0, group: null }, "");
 render();
