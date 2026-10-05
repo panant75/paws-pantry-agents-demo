@@ -1199,3 +1199,10 @@ ul { margin: 0; padding: 0; list-style: none; }
   .tool-row { flex-wrap: wrap; }
   .tool-row .tool-status { margin-left: 52px; }
 }
+@media (max-width: 560px) {
+  .topbar-inner { padding: 0 12px; gap: 10px; }
+  .progress { gap: 4px; }
+  .progress-step { gap: 4px; }
+  .progress-dot { width: 24px; height: 24px; font-size: 11px; }
+  .progress-line { width: 10px; }
+}
