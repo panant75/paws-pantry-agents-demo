@@ -29,6 +29,16 @@ Every screen carries one idea and one primary action. Secondary detail is one ta
 - The combined label ("Warm + Neighborly") shows on the agent card, on the Step 4 row and on dashboard drafts.
 - **Step 4 inline edit:** tap an agent row to expand its chips and a sample line. A chip change applies only to that agent, and one row is open at a time. "Use one voice for everyone" is a secondary, collapsed option. Extra bottom padding keeps the last line clear of the footer.
 
+### Grounded in real patterns (Mobbin)
+- Once / LinkedIn onboarding: one question per screen, big title, one primary action.
+- Mindtrip "Communication style": a one-line meaning for each voice (shown under the chips).
+- X "All topics" and Perplexity interests: "+" on addable chips, ✓ on picked chips.
+- Givingli "Let us help": tone chips that rewrite the sample live; the sample has a left accent bar.
+- Box Box Club / Copilot settings: grouped list with hairline dividers for the per-agent voice rows.
+- Claude "Connectors", Fresha, Noom: connector rows grouped per area (logo, name, one line, Connect/✓).
+- Hulu interests: a sticky counter on the primary action ("Done, show my agents (N picked)").
+- Cash App / Perplexity AI home: a prompt plus two quiet suggestion pills, then a short task list.
+
 ### Motion system
 Tokens: `--dur-fast 120ms` (press/hover), `--dur 200ms` (reveals, state), `--dur-slow 260ms` (screen enter), ease-out `cubic-bezier(.2,0,0,1)` to enter, ease-in to exit.
 Screens fade and rise 8px. Only the block you just opened animates (others are marked `.static`, so there is no re-animation on re-render). Press feedback is `scale(.98)`, with focus-visible rings. Glows are static. Staggering happens only on the "Learning how you work" screen. `prefers-reduced-motion` turns animations and smooth scrolling off.

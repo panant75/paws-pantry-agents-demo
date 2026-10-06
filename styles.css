@@ -2024,3 +2024,28 @@ body { letter-spacing: -0.005em; }
 .preview { background: none; border: 0; padding: 0; box-shadow: none; }
 .stage { padding-bottom: calc(var(--navfoot-h) + env(safe-area-inset-bottom, 0px) + 72px); }
 .scroll-hint { background: rgba(38, 40, 48, 0.94); color: #fff; border: 1px solid var(--line-strong); font-weight: 500; }
+
+/* ===== v5.1 · Mobbin-grounded refinements ===== */
+/* X "All topics" / Perplexity interests: "+" on addable chips, ✓ on picked ones */
+.preset { transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.preset-mark { display: inline-block; width: 0.75em; text-align: center; opacity: 0.6; font-size: 12px; }
+.preset.selected .preset-mark { opacity: 1; }
+.preset.blocked .preset-mark { display: none; }
+.preset-check { display: none; }
+/* Givingli "Let us help": sample as a quiet text block with a left accent bar, not a box in a box */
+.bubble { background: transparent; border: 0; border-left: 2px solid #6683F2; border-radius: 0; padding: 2px 0 2px 14px; color: var(--ink); }
+.vs-sample { border-left: 2px solid #6683F2; padding-left: 12px; }
+/* Box Box Club / Copilot settings: one grouped container with hairline dividers instead of many cards */
+.vs-list { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.vs-item { border: 0; border-radius: 0; background: transparent; }
+.vs-item + .vs-item { border-top: 1px solid var(--line); }
+.vs-item.open { background: rgba(43, 71, 185, 0.12); box-shadow: inset 2px 0 0 #6683F2; }
+/* Claude "Connectors" / Fresha social logins: grouped rows per area */
+.tool-list { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.tool-row, .tool-row.connected { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+.tool-row + .tool-row { border-top: 1px solid var(--line) !important; }
+/* Cash App AI home: a couple of quiet suggestion pills under the prompt */
+.prompt-suggest { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.suggest-pill { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font: 400 13px var(--font); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.suggest-pill:hover { border-color: var(--line-strong); color: #fff; }
+.suggest-pill:active { transform: scale(0.98); }

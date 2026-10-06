@@ -110,6 +110,8 @@ const PRESETS = [
   { id: "local", label: "Neighborly / local", formality: 2, emoji: false },
   { id: "premium", label: "Premium / expert", formality: 5, emoji: false },
 ];
+/* One-line meaning per voice (shown under the chips, Mindtrip "Communication style" pattern). */
+const PRESET_DESC = { warm: "friendly, owns mistakes", pro: "clear and polished", playful: "light, a little fun", concise: "short and to the point", local: "first-name, neighborhood feel", premium: "expert and courteous" };
 const FORMALITY_LABELS = ["", "Very casual", "Casual", "Balanced", "Polished", "Formal"];
 const DEFAULT_VOICE_PRESET = { captain: "concise", pal: "warm", orders: "warm", pantry: "pro", cash: "concise", growth: "playful", ship: "local" };
 
@@ -484,10 +486,10 @@ function presetChipsHTML(a) {
       const on = sel.includes(p.id);
       const c = on ? [] : presetConflicts(v, p.id);
       const blocked = c.length > 0;
-      return `<button type="button" class="preset ${on ? "selected" : ""} ${blocked ? "blocked" : ""}" aria-pressed="${on}" ${blocked ? `aria-disabled="true" title="Can't combine with ${c.map((x) => PRESET_SHORT[x]).join(" or ")}"` : ""} data-preset="${p.id}" data-vagent="${a.id}">${on ? `<span class="preset-check" aria-hidden="true">✓</span>` : ""}${escapeHtml(PRESET_SHORT[p.id])}</button>`;
+      return `<button type="button" class="preset ${on ? "selected" : ""} ${blocked ? "blocked" : ""}" aria-pressed="${on}" ${blocked ? `aria-disabled="true" title="Can't combine with ${c.map((x) => PRESET_SHORT[x]).join(" or ")}"` : ""} data-preset="${p.id}" data-vagent="${a.id}"><span class="preset-mark" aria-hidden="true">${on ? "✓" : blocked ? "" : "+"}</span>${escapeHtml(PRESET_SHORT[p.id])}</button>`;
     }).join("")}
   </div>
-  <p class="voice-hint ${state.voiceHint && state.voiceHint.id === a.id ? "warn" : ""}" data-voice-hint="${a.id}" aria-live="polite">${state.voiceHint && state.voiceHint.id === a.id ? escapeHtml(state.voiceHint.text) : `Pick up to ${MAX_PRESETS}. They blend.`}</p>`;
+  <p class="voice-hint ${state.voiceHint && state.voiceHint.id === a.id ? "warn" : ""}" data-voice-hint="${a.id}" aria-live="polite">${state.voiceHint && state.voiceHint.id === a.id ? escapeHtml(state.voiceHint.text) : escapeHtml((sel.length ? `${PRESET_SHORT[sel[sel.length - 1]]}: ${PRESET_DESC[sel[sel.length - 1]]}` : "Pick a voice") + (sel.length < MAX_PRESETS ? ` · blend up to ${MAX_PRESETS}` : ""))}</p>`;
 }
 
 /* ---------- DOM refs ---------- */
@@ -1285,6 +1287,9 @@ function homeHTML() {
           <button type="submit" class="prompt-send" aria-label="Send">↑</button>
         </div>
       </form>
+      <div class="prompt-suggest" aria-label="Suggestions">
+        ${["Best sellers this week", "Draft a promo"].map((q) => `<button type="button" class="suggest-pill" data-suggest="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}
+      </div>
       <div class="tasks">
         <h2 class="tasks-head">Your tasks</h2>
         <ul class="task-list" id="task-list">
@@ -1483,6 +1488,10 @@ function bindScreen() {
       render({ keepScroll: true });
       toast("Store Captain picked it up (demo).");
     });
+    stage.querySelectorAll("[data-suggest]").forEach((b) => b.addEventListener("click", () => {
+      document.getElementById("prompt-input").value = b.dataset.suggest;
+      document.getElementById("prompt-form").requestSubmit();
+    }));
     document.querySelector("[data-prompt-plus]")?.addEventListener("click", () => toast("In the full product, you could attach files or photos here."));
     document.getElementById("task-list")?.addEventListener("click", (e) => { if (e.target.closest("[data-goto-dash]")) go(4); });
     document.getElementById("cta-restart")?.addEventListener("click", restartDemo);
