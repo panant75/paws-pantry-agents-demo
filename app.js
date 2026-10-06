@@ -683,7 +683,7 @@ function insightHTML(id) {
   }
   if (ins.why) parts.push(`<p class="ins-why"><span>Why it keeps happening</span>${escapeHtml(ins.why())}</p>`);
   if (ins.fixes && ins.fixes.length) {
-    parts.push(`<section class="ins-sec"><h3 class="ins-h">Suggested fix</h3>
+    parts.push(`<section class="ins-sec"><h3 class="ins-h">Fix it</h3>
       ${ins.fixes.map((fid) => {
         const f = FIXES[fid];
         const st = fixStatus(fid);
@@ -692,7 +692,7 @@ function insightHTML(id) {
           <strong>${escapeHtml(f.title)}</strong>
           <span class="fix-meta">${escapeHtml(owners)} · ${escapeHtml(f.impact)}</span>
           ${st === "applied"
-            ? `<div class="fix-state"><span>✓ Applied · Store Captain will set this up. Nothing needed from you.</span><button type="button" class="link-btn" data-fix-undo="${fid}">Undo</button></div>`
+            ? `<div class="fix-state"><span>✓ Applied · Store Captain is on it</span><button type="button" class="link-btn" data-fix-undo="${fid}">Undo</button></div>`
             : st === "dismissed"
               ? `<div class="fix-state muted"><span>Skipped for now</span><button type="button" class="link-btn" data-fix-undo="${fid}">Undo</button></div>`
               : `<div class="fix-actions"><button type="button" class="btn btn-sm btn-primary" data-fix-apply="${fid}">Apply</button><button type="button" class="btn btn-sm btn-ghost" data-fix-skip="${fid}">Not now</button></div>`}
@@ -929,10 +929,10 @@ function setNav() {
   btnBack.setAttribute("aria-label", "Back");
   const labels = { 0: "Continue", 3: "Continue", 4: "Go to Gemini home", 5: "Get started" };
   if (inSub) {
-    btnNext.textContent = "Save & back to all pain points";
+    btnNext.textContent = "Done";
     btnNext.dataset.mode = "save-back";
   } else if (state.step === 1) {
-    btnNext.innerHTML = `Done, show my agents <span class="nx-count">(${nPicked}<span class="nx-long"> problem${nPicked === 1 ? "" : "s"}</span> picked)</span>`;
+    btnNext.innerHTML = `Show my team <span class="nx-count">(${nPicked})</span>`;
     btnNext.dataset.mode = "advance";
   } else {
     btnNext.textContent = labels[state.step] || "Next";
@@ -1042,9 +1042,7 @@ function renderWelcome() {
   const types = ["Pet food shop", "Cafe / bakery", "Boutique retail", "Home services", "Salon / spa", "Other local business"];
   return `
     <div class="focus">
-      <div class="screen-eyebrow">Getting to know you</div>
       <h1 class="screen-title">What do you do?</h1>
-      <p class="screen-sub">So Gemini knows what matters to you.</p>
       <label class="sr-only" for="biz-name">Business name</label>
       <input id="biz-name" class="big-input" type="text" value="${escapeHtml(state.business.name)}" autocomplete="organization" placeholder="Your business name" />
       <button type="button" class="biz-meta" data-ui="biz" aria-expanded="${ui("biz")}">${escapeHtml(state.business.type)} · ${escapeHtml(state.business.size)} <span>${ui("biz") ? "Done" : "Change"}</span></button>
@@ -1075,7 +1073,7 @@ function tallyHTML() {
         <span class="tally-k">At stake each week</span>
         <span class="tally-v"><b id="tally-hours">${Math.round(val("hoursLost"))}</b> hrs ${chip("hoursLost")}</span>
         <span class="tally-v money"><b id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</b> ${chip("dollarsAtStake")}</span>`
-        : `<span class="tally-k">Pick a problem to see what's at stake.</span>`}
+        : `<span class="tally-k">At stake each week</span><span class="tally-v tally-empty">—</span>`}
       </div>`;
 }
 
@@ -1086,9 +1084,8 @@ function renderPains() {
 
 function renderPainMenu() {
   return `
-    <div class="screen-eyebrow">Getting to know you</div>
     <h1 class="screen-title">What's getting in the way?</h1>
-    <p class="screen-sub">Open any area and pick what applies.</p>
+    <p class="screen-sub">Pick all that apply.</p>
     <div class="narrow">
       ${tallyHTML()}
       <div class="group-list" id="group-list">
@@ -1103,7 +1100,6 @@ function renderPainMenu() {
           </button>`;
         }).join("")}
       </div>
-      ${screenNote("Estimates are illustrative · tap ⓘ to see the math")}
     </div>`;
 }
 
@@ -1147,7 +1143,6 @@ function renderPainGroup(g) {
           </div>`;
         }).join("")}
       </div>
-      ${screenNote("Estimates are illustrative")}
     </div>`;
 }
 
@@ -1225,7 +1220,6 @@ function renderAgents() {
   const others = AGENTS.filter((a) => !main.includes(a));
   const groups = selectedGroups().map((g) => g.short);
   return `
-    <div class="screen-eyebrow">Your agent team</div>
     <h1 class="screen-title">Meet your team</h1>
     <p class="screen-sub">${groups.length ? `Picked for ${escapeHtml(groups.join(", "))}.` : "A lean starter team."}</p>
     <div class="narrow wide" id="agent-grid">
@@ -1279,7 +1273,6 @@ function renderSetup() {
   const active = activeAgents();
   const ap = APPROVALS.find((a) => a.id === state.approval) || APPROVALS[0];
   return `
-    <div class="screen-eyebrow">Setting up</div>
     <h1 class="screen-title">Bring your work with you</h1>
     <p class="screen-sub">Connect your apps so your team starts with context.</p>
     <div class="narrow wide">
@@ -1380,9 +1373,7 @@ function renderDashboard() {
   const groups = selectedGroups().map((g) => g.short);
   return `
     <div class="dash-header">
-      <div class="screen-eyebrow">Day one</div>
       <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
-      ${groups.length ? `<p class="screen-sub">Focused on ${escapeHtml(groups.join(" · "))}</p>` : ""}
     </div>
     <div class="narrow wide">
       <div class="kpi-row ${ui("kpis") ? "four" : ""}">
@@ -1439,7 +1430,7 @@ function renderDashboard() {
                   <button type="button" class="btn btn-sm btn-primary btn-approve" data-approve="${item.id}">Approve</button>
                   <button type="button" class="btn btn-sm btn-ghost btn-edit" data-edit="${item.id}">Edit</button>
                 </div>
-                <div class="approval-status">${resolved === "edited" ? "Edited · the agent will revise" : "Approved · the agent will go ahead"}</div>
+                <div class="approval-status">${resolved === "edited" ? "Sent back to revise" : "Approved"}</div>
               </div>`;
           }).join("")}
         </div>
@@ -1447,7 +1438,7 @@ function renderDashboard() {
       </section>
 
       <section class="calm-sec" aria-labelledby="act-h">
-        <div class="sec-head"><h2 class="sec-title" id="act-h">What your team did</h2><span class="count">This week</span></div>
+        <div class="sec-head"><h2 class="sec-title" id="act-h">This week</h2></div>
         <div>
           ${shownFeed.map((f) => {
             const agent = agentById(f.agentId);
@@ -1469,7 +1460,7 @@ function homeTasks() {
   const waiting = [], working = [], done = [];
   sampleApprovals().forEach((a) => {
     const r = state.approvalsResolved[a.id];
-    const t = { agentId: a.agentId, title: a.title, status: r === "approved" ? "Done · approved by you" : r === "edited" ? "Revising your edit" : "Waiting on your approval", wait: !r };
+    const t = { agentId: a.agentId, title: a.title, status: r === "approved" ? "Done · approved by you" : r === "edited" ? "Revising your edit" : "Needs your OK", wait: !r };
     (r ? done : waiting).push(t);
   });
   const verb = { "Replied to": "Replying to", Flagged: "Watching", Confirmed: "Confirming", Grouped: "Grouping", Queued: "Drafting", Compiled: "Compiling" };
@@ -1542,14 +1533,9 @@ function renderClosing() {
             </ul>
           </div>
         </div>
-        <div class="impact-row">
-          <div class="impact-tile"><div class="n">${val("sel_pains") || "—"} ${chip("sel_pains")}</div><div class="l">Problems picked</div></div>
-          <div class="impact-tile"><div class="n">${agents.length} ${chip("sel_agents")}</div><div class="l">Agents on team</div></div>
-          <div class="impact-tile"><div class="n">${val("sel_tools")} ${chip("sel_tools")}</div><div class="l">Apps connected</div></div>
-        </div>
       </div>` : ""}
       <div class="close-actions"><button type="button" class="link-btn" id="cta-restart">Restart demo</button></div>
-      ${screenNote("Gemini agent team demo for Paws &amp; Pantry · sample data, not a performance guarantee")}
+      ${screenNote("Sample data · not a guarantee")}
     </div>`;
 }
 
@@ -1672,8 +1658,8 @@ function bindScreen() {
     document.getElementById("approval-list")?.addEventListener("click", (e) => {
       const approve = e.target.closest("[data-approve]");
       const edit = e.target.closest("[data-edit]");
-      if (approve) { state.approvalsResolved[approve.dataset.approve] = "approved"; render({ keepScroll: true }); toast("Approved. The agent will go ahead."); }
-      else if (edit) { state.approvalsResolved[edit.dataset.edit] = "edited"; render({ keepScroll: true }); toast("Marked for edit. The agent will revise."); }
+      if (approve) { state.approvalsResolved[approve.dataset.approve] = "approved"; render({ keepScroll: true }); }
+      else if (edit) { state.approvalsResolved[edit.dataset.edit] = "edited"; render({ keepScroll: true }); }
     });
   }
 

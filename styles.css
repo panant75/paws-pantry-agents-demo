@@ -2097,3 +2097,5 @@ body { letter-spacing: -0.005em; }
 .sub-toggle { align-items: center; padding: 14px 16px; min-height: 52px; border-radius: inherit; }
 .sub-toggle .sub-box { flex: none; margin-top: 0; }
 .sub-toggle .sub-title { font-size: 15px; line-height: 1.4; }
+.tally-card.empty { background: rgba(255, 255, 255, 0.03); border-color: var(--line); }
+.tally-empty { color: var(--muted); }
