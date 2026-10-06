@@ -201,11 +201,6 @@ const VOICE_LINES = {
   },
 };
 
-function defaultVoice(agentId) {
-  const p = PRESETS.find((x) => x.id === (DEFAULT_VOICE_PRESET[agentId] || "warm"));
-  return { preset: p.id, formality: p.formality, emoji: p.emoji, length: "short" };
-}
-function presetLabel(id) { return (PRESETS.find((p) => p.id === id) || PRESETS[0]).label; }
 
 /* ---------- Data inputs (sample) ---------- */
 const DEFAULT_INPUTS = (() => {
@@ -229,6 +224,9 @@ function freshState() {
     painGroup: null,
     showMore: false,
     homeTasks: [],
+    ui: {},
+    voiceEdit: null,
+    voiceHint: null,
     agentsOn: {},
     _agentsTouched: false,
     tools: {},
@@ -388,6 +386,64 @@ function activeAgents() { return AGENTS.filter((a) => state.agentsOn[a.id]); }
 function fillVars(s) {
   return s.replace(/\{biz\}/g, state.business.name).replace(/\{street\}/g, BUSINESS_CONFIG.street);
 }
+/* Multi-select voices: up to 3 presets blend into one voice. The first pick sets the base line;
+   extra picks layer on composable phrasing. Conflicting pairs can't be combined. */
+const PRESET_SHORT = { warm: "Warm", pro: "Professional", playful: "Playful", concise: "Concise", local: "Neighborly", premium: "Premium" };
+const PRESET_CONFLICTS = { pro: ["playful"], playful: ["pro", "premium"], premium: ["playful", "concise"], concise: ["premium"], warm: [], local: [] };
+const MAX_PRESETS = 3;
+const VOICE_MODS = {
+  warm: { customer: "We really appreciate you!", owner: "Nice work this week.", post: "We love our pack!" },
+  local: { customer: "See you around {street}!", owner: "The {street} regulars will be happy.", post: "Swing by on {street}!" },
+  playful: { customer: "Tails up!", owner: "Onward, captain!", post: "Zoomies encouraged!" },
+  premium: { customer: "As always, it's our pleasure to look after you.", owner: "Happy to walk you through the details anytime.", post: "Thoughtfully sourced, always." },
+  pro: null,
+  concise: null,
+};
+function defaultVoice(agentId) {
+  const p = PRESETS.find((x) => x.id === (DEFAULT_VOICE_PRESET[agentId] || "warm"));
+  return { preset: p.id, presets: [p.id], formality: p.formality, emoji: p.emoji, length: "short" };
+}
+function presetLabel(id) { return (PRESETS.find((p) => p.id === id) || PRESETS[0]).label; }
+const vPresets = (v) => (v.presets && v.presets.length ? v.presets : [v.preset]);
+function voiceLabel(v) { return vPresets(v).map((id) => PRESET_SHORT[id]).join(" + "); }
+function presetConflicts(v, pid) {
+  const sel = vPresets(v);
+  return sel.filter((s) => (PRESET_CONFLICTS[pid] || []).includes(s));
+}
+/* Returns a hint string when the tap can't be applied; otherwise mutates the voice. */
+function togglePreset(v, pid) {
+  const sel = [...vPresets(v)];
+  if (sel.includes(pid)) {
+    if (sel.length === 1) return "Keep at least one voice.";
+    sel.splice(sel.indexOf(pid), 1);
+  } else {
+    const c = presetConflicts(v, pid);
+    if (c.length) return `${PRESET_SHORT[pid]} can't combine with ${c.map((x) => PRESET_SHORT[x]).join(" or ")}.`;
+    if (sel.length >= MAX_PRESETS) return `Up to ${MAX_PRESETS} voices. Tap one to remove it.`;
+    sel.push(pid);
+  }
+  const ps = sel.map((id) => PRESETS.find((p) => p.id === id));
+  v.presets = sel;
+  v.preset = sel[0];
+  v.formality = Math.round(ps.reduce((a, p) => a + p.formality, 0) / ps.length);
+  v.emoji = ps.some((p) => p.emoji) && !sel.some((id) => id === "pro" || id === "concise" || id === "premium");
+  return "";
+}
+function setPresetsSingle(v, pid) {
+  const p = PRESETS.find((x) => x.id === pid);
+  Object.assign(v, { preset: pid, presets: [pid], formality: p.formality, emoji: p.emoji });
+}
+function blendBody(agentId, v) {
+  const vd = VOICE_LINES[agentId];
+  const sel = vPresets(v);
+  const aud = vd.to === "owner" ? "owner" : vd.to ? "customer" : "post";
+  let body = fillVars(vd.lines[sel[0]]);
+  const extras = sel.slice(1);
+  if (extras.includes("concise")) body = body.split(/(?<=[.!?])\s+/)[0];
+  extras.forEach((id) => { const m = VOICE_MODS[id]; if (m) body += ` ${fillVars(m[aud])}`; });
+  if (extras.includes("pro")) body = body.replace(/!/g, ".");
+  return body;
+}
 function greeting(preset, f, name) {
   if (f === 1) return `Hey ${name}!`;
   if (f === 2) return `Hi ${name}!`;
@@ -404,7 +460,7 @@ function voiceMessage(agentId, v = state.voices[agentId]) {
   const parts = [];
   const toName = vd.to === "owner" ? BUSINESS_CONFIG.ownerFirstName : vd.to;
   if (toName) parts.push(greeting(v.preset, v.formality, toName));
-  let body = fillVars(vd.lines[v.preset]);
+  let body = blendBody(agentId, v);
   if (v.emoji) body += ` ${vd.emoji}`;
   if (v.length === "detailed") body += ` ${fillVars(vd.detail)}`;
   if (!toName && vd.cta) body += ` ${vd.cta[v.formality]}`;
@@ -417,7 +473,21 @@ function voiceMessage(agentId, v = state.voices[agentId]) {
   return parts.join("\n");
 }
 function voiceSummary(v) {
-  return `${presetLabel(v.preset)} · ${FORMALITY_LABELS[v.formality]} · ${v.emoji ? "Emoji on" : "No emoji"} · ${v.length === "short" ? "Short" : "Detailed"}`;
+  return `${voiceLabel(v)} · ${FORMALITY_LABELS[v.formality]} · ${v.emoji ? "Emoji on" : "No emoji"} · ${v.length === "short" ? "Short" : "Detailed"}`;
+}
+/* Chip row shared by Step 3 and Step 4 (multi-select with conflict states). */
+function presetChipsHTML(a) {
+  const v = state.voices[a.id];
+  const sel = vPresets(v);
+  return `<div class="preset-row" role="group" aria-label="Voice for ${escapeHtml(a.name)} (pick up to ${MAX_PRESETS})">
+    ${PRESETS.map((p) => {
+      const on = sel.includes(p.id);
+      const c = on ? [] : presetConflicts(v, p.id);
+      const blocked = c.length > 0;
+      return `<button type="button" class="preset ${on ? "selected" : ""} ${blocked ? "blocked" : ""}" aria-pressed="${on}" ${blocked ? `aria-disabled="true" title="Can't combine with ${c.map((x) => PRESET_SHORT[x]).join(" or ")}"` : ""} data-preset="${p.id}" data-vagent="${a.id}">${on ? `<span class="preset-check" aria-hidden="true">✓</span>` : ""}${escapeHtml(PRESET_SHORT[p.id])}</button>`;
+    }).join("")}
+  </div>
+  <p class="voice-hint ${state.voiceHint && state.voiceHint.id === a.id ? "warn" : ""}" data-voice-hint="${a.id}" aria-live="polite">${state.voiceHint && state.voiceHint.id === a.id ? escapeHtml(state.voiceHint.text) : `Pick up to ${MAX_PRESETS}. They blend.`}</p>`;
 }
 
 /* ---------- DOM refs ---------- */
@@ -522,6 +592,7 @@ function popHTML(id) {
 }
 
 const isSheet = () => window.innerWidth <= 560;
+const REDUCED_MOTION = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 function positionPop() {
   if (popEl.hidden) return;
   if (isSheet()) {
@@ -677,10 +748,6 @@ function enterStep() {
       if (a.alwaysOn) state.agentsOn[a.id] = true;
       else if (state.agentsOn[a.id] === undefined || !state._agentsTouched) state.agentsOn[a.id] = rec.has(a.id);
     });
-    if (!state.openVoice.size) {
-      const first = AGENTS.find((a) => !a.alwaysOn && state.agentsOn[a.id]) || AGENTS[0];
-      state.openVoice.add(first.id);
-    }
   }
 }
 
@@ -692,7 +759,7 @@ function go(step, opts = {}) {
   enterStep();
   if (!opts.fromHistory) history.pushState({ step: state.step, group: state.painGroup }, "");
   render();
-  window.scrollTo({ top: 0, behavior: opts.fromHistory ? "auto" : "smooth" });
+  window.scrollTo({ top: 0, behavior: opts.fromHistory || REDUCED_MOTION() ? "auto" : "smooth" });
 }
 
 /* Drill into a pain area (its own history entry so browser/Android back returns to the menu). */
@@ -749,10 +816,14 @@ function render(opts = {}) {
   screen.innerHTML = renderers[state.step]();
   stage.appendChild(screen);
   bindScreen();
+  settleReveals(stage, opts.reveal);
   if (opts.keepScroll) window.scrollTo(0, y);
 }
 
 /* ---------- Screens ---------- */
+const ui = (k) => !!state.ui[k];
+const screenNote = (t = "Sample data · tap ⓘ to see where a number comes from") => `<p class="screen-note">${t}</p>`;
+
 function renderWelcome() {
   const sizes = ["Just me", "1–5 people", "6–20 people", "20+ people"];
   const types = ["Pet food shop", "Cafe / bakery", "Boutique retail", "Home services", "Salon / spa", "Other local business"];
@@ -763,9 +834,11 @@ function renderWelcome() {
       <p class="screen-sub">So Gemini knows what matters to you.</p>
       <label class="sr-only" for="biz-name">Business name</label>
       <input id="biz-name" class="big-input" type="text" value="${escapeHtml(state.business.name)}" autocomplete="organization" placeholder="Your business name" />
-      <div class="focus-fields">
+      <button type="button" class="biz-meta" data-ui="biz" aria-expanded="${ui("biz")}">${escapeHtml(state.business.type)} · ${escapeHtml(state.business.size)} <span>${ui("biz") ? "Done" : "Change"}</span></button>
+      ${ui("biz") ? `
+      <div class="focus-fields reveal" data-r="biz">
         <div class="field">
-          <label>What kind of business?</label>
+          <label>Kind of business</label>
           <div class="chip-row" id="type-chips">
             ${types.map((t) => `<button type="button" class="chip ${state.business.type === t ? "selected" : ""}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("")}
           </div>
@@ -776,34 +849,21 @@ function renderWelcome() {
             ${sizes.map((s) => `<button type="button" class="chip ${state.business.size === s ? "selected" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
           </div>
         </div>
-      </div>
-      <p class="focus-note">Next: pick what's getting in the way, meet your agents, connect your apps. Every number is sample data with a visible source.</p>
+      </div>` : ""}
     </div>`;
 }
 
-function tallyListHTML() {
-  return selectedGroups().map((g) => `<li><span>${g.icon} ${escapeHtml(g.short)}</span><span>${countIn(g)} picked</span></li>`).join("")
-    || "<li style='color:var(--muted)'>Nothing picked yet</li>";
-}
+function tallyListHTML() { return ""; }
 function tallyHTML() {
+  const n = state.selectedSubs.length;
   return `
-      <aside class="tally-card" id="tally-card">
-        <h3>At stake each week</h3>
-        <p class="tally-note">Illustrative estimates from the problems you pick. Not a quote or guarantee.</p>
-        <div class="tally-metrics">
-          <div class="tally-metric">
-            <div class="label">Hours lost / week ${chip("hoursLost")}</div>
-            <div class="value" id="tally-hours">${Math.round(val("hoursLost"))}</div>
-            <div class="unit">illustrative</div>
-          </div>
-          <div class="tally-metric money">
-            <div class="label">$ at stake / week ${chip("dollarsAtStake")}</div>
-            <div class="value" id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</div>
-            <div class="unit">illustrative</div>
-          </div>
-        </div>
-        <ul class="tally-selected" id="tally-list">${tallyListHTML()}</ul>
-      </aside>`;
+      <div class="tally-card ${n ? "" : "empty"}" id="tally-card">
+        ${n ? `
+        <span class="tally-k">At stake each week</span>
+        <span class="tally-v"><b id="tally-hours">${Math.round(val("hoursLost"))}</b> hrs ${chip("hoursLost")}</span>
+        <span class="tally-v money"><b id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</b> ${chip("dollarsAtStake")}</span>`
+        : `<span class="tally-k">Pick a problem to see what's at stake.</span>`}
+      </div>`;
 }
 
 function renderPains() {
@@ -814,29 +874,23 @@ function renderPains() {
 function renderPainMenu() {
   return `
     <div class="screen-eyebrow">Getting to know you</div>
-    <h1 class="screen-title">Where does ${escapeHtml(state.business.name)} feel the pinch?</h1>
-    <p class="screen-sub">Open any of the 5 areas, in any order, and pick what applies. When you've covered everything, tap <strong>Done</strong>. Totals are <strong>illustrative estimates</strong>.</p>
-    <div class="pain-layout">
-      <div class="menu-col">
-      ${selectedGroups().length ? `<div class="picked-row" aria-label="Areas picked">${selectedGroups().map((g) => `<button type="button" class="picked-chip" data-group="${g.id}">${g.icon} ${escapeHtml(g.short)} <b>${countIn(g)}</b></button>`).join("")}</div>` : ""}
+    <h1 class="screen-title">What's getting in the way?</h1>
+    <p class="screen-sub">Open any area and pick what applies.</p>
+    <div class="narrow">
+      ${tallyHTML()}
       <div class="group-list" id="group-list">
         ${PAIN_GROUPS.map((g) => {
           const n = countIn(g);
           return `
           <button type="button" class="group-card ${n ? "selected" : ""}" data-group="${g.id}" aria-label="${escapeHtml(g.title)}${n ? ` (${n} selected)` : ""}">
-            <span class="group-icon" style="background:${g.color}">${g.icon}${n ? `<span class="group-check" aria-hidden="true">✓</span>` : ""}</span>
-            <span class="group-text">
-              <span class="group-title">${escapeHtml(g.title)}</span>
-              <span class="group-meta">${g.subs.length} problems inside${n ? "" : " · tap to pick"}</span>
-            </span>
+            <span class="group-icon" aria-hidden="true">${g.icon}${n ? `<span class="group-check">✓</span>` : ""}</span>
+            <span class="group-text"><span class="group-title">${escapeHtml(g.title)}</span></span>
             ${n ? `<span class="group-badge">${n} selected</span>` : ""}
             <span class="group-chev" aria-hidden="true">›</span>
           </button>`;
         }).join("")}
       </div>
-      <p class="menu-foot-note" id="menu-end">That's all 5 areas. Tap <strong>Done</strong> below when you're ready.</p>
-      </div>
-      ${tallyHTML()}
+      ${screenNote("Estimates are illustrative · tap ⓘ to see the math")}
     </div>`;
 }
 
@@ -859,42 +913,34 @@ function setupScrollHint() {
 function renderPainGroup(g) {
   const allOn = g.subs.every((s) => subSel(s.id));
   return `
-    <div class="sub-top">
-      <button type="button" class="btn btn-soft btn-sm back-menu" data-back-menu>← Back to all pain points</button>
+    <div class="narrow">
       <nav class="crumbs" aria-label="Breadcrumb">
-        <button type="button" class="crumb-link" data-back-menu>All pain points</button>
+        <button type="button" class="crumb-link back-menu" data-back-menu>← All pain points</button>
         <span class="crumb-sep" aria-hidden="true">›</span>
         <span aria-current="page">${escapeHtml(g.short)}</span>
       </nav>
-    </div>
-    <h1 class="screen-title group-heading"><span class="group-icon sm" style="background:${g.color}" aria-hidden="true">${g.icon}</span><span>${escapeHtml(g.title)}</span></h1>
-    <p class="screen-sub">Pick what applies and set how much it hurts. Then save and go back to check the other areas. Agents and connectors come after you've seen the full list.</p>
-    <div class="pain-layout">
-      <div class="sub-col">
-        <div class="sub-list-head">
-          <span>${countIn(g)} of ${g.subs.length} picked</span>
-          <button type="button" class="btn btn-ghost btn-sm" data-select-all="${g.id}" aria-pressed="${allOn}">${allOn ? "Clear all" : "Select all"}</button>
-        </div>
-        <div class="sub-list" id="sub-list">
-          ${g.subs.map((s) => {
-            const sel = subSel(s.id);
-            return `
-            <div class="sub-item ${sel ? "selected" : ""}" data-sub="${s.id}">
-              <button type="button" class="sub-toggle" role="checkbox" aria-checked="${!!sel}" data-sub-toggle="${s.id}">
-                <span class="sub-box" aria-hidden="true">${sel ? "✓" : ""}</span>
-                <span class="sub-title">${escapeHtml(s.title)}</span>
-              </button>
-              ${sel ? `
-              <div class="severity sub-sev">
-                <label for="sev-${s.id}">How much it hurts</label>
-                <input id="sev-${s.id}" type="range" min="1" max="5" value="${sel.severity}" data-sev="${s.id}" />
-                <span class="severity-val">${sel.severity}/5</span>
-              </div>` : ""}
-            </div>`;
-          }).join("")}
-        </div>
-      </div>
+      <h1 class="screen-title group-heading">${escapeHtml(g.title)}</h1>
       ${tallyHTML()}
+      <div class="sub-list-head"><button type="button" class="link-btn" data-select-all="${g.id}" aria-pressed="${allOn}">${allOn ? "Clear all" : "Select all"}</button></div>
+      <div class="sub-list" id="sub-list">
+        ${g.subs.map((s) => {
+          const sel = subSel(s.id);
+          return `
+          <div class="sub-item ${sel ? "selected" : ""}" data-sub="${s.id}">
+            <button type="button" class="sub-toggle" role="checkbox" aria-checked="${!!sel}" data-sub-toggle="${s.id}">
+              <span class="sub-box" aria-hidden="true">${sel ? "✓" : ""}</span>
+              <span class="sub-title">${escapeHtml(s.title)}</span>
+            </button>
+            ${sel ? `
+            <div class="severity sub-sev">
+              <label for="sev-${s.id}">How much it hurts</label>
+              <input id="sev-${s.id}" type="range" min="1" max="5" value="${sel.severity}" data-sev="${s.id}" />
+              <span class="severity-val">${sel.severity}/5</span>
+            </div>` : ""}
+          </div>`;
+        }).join("")}
+      </div>
+      ${screenNote("Estimates are illustrative")}
     </div>`;
 }
 
@@ -902,21 +948,23 @@ function voicePanelHTML(a) {
   const v = state.voices[a.id];
   const vd = VOICE_LINES[a.id];
   const open = state.openVoice.has(a.id);
+  if (!open) return `<div class="voice-panel" data-voice-panel="${a.id}" hidden></div>`;
   return `
-    <div class="voice-bar">
-      <div class="voice-bar-text"><span class="voice-label">Voice</span><span class="voice-current" data-voice-current="${a.id}">${escapeHtml(voiceSummary(v))}</span></div>
-      <button type="button" class="voice-btn" data-voice-toggle="${a.id}" aria-expanded="${open}">${open ? "Done" : "Customize"}</button>
-    </div>
-    <div class="voice-panel" data-voice-panel="${a.id}" ${open ? "" : "hidden"}>
-      <div class="vp-label">Preset voice</div>
-      <div class="preset-row" role="radiogroup" aria-label="Preset voice for ${escapeHtml(a.name)}">
-        ${PRESETS.map((p) => `<button type="button" class="preset ${v.preset === p.id ? "selected" : ""}" role="radio" aria-checked="${v.preset === p.id}" data-preset="${p.id}" data-vagent="${a.id}">${escapeHtml(p.label)}</button>`).join("")}
+    <div class="voice-panel reveal" data-r="voice-${a.id}" data-voice-panel="${a.id}">
+      ${presetChipsHTML(a)}
+      <div class="preview">
+        <div class="preview-head">Sample · ${escapeHtml(vd.context)}</div>
+        <div class="bubble" data-preview="${a.id}" aria-live="polite">${escapeHtml(voiceMessage(a.id))}</div>
       </div>
-      <div class="vp-grid">
+      <div class="vp-actions">
+        <button type="button" class="link-btn" data-ui="fine-${a.id}" aria-expanded="${ui(`fine-${a.id}`)}">${ui(`fine-${a.id}`) ? "Hide fine-tuning" : "Fine-tune"}</button>
+        <button type="button" class="link-btn apply-all" data-apply-all="${a.id}">Apply to all agents</button>
+      </div>
+      ${ui(`fine-${a.id}`) ? `
+      <div class="vp-grid reveal" data-r="fine-${a.id}">
         <div class="vp-field vp-formality">
           <div class="vp-label">Formality <span class="vp-val" data-formality-label="${a.id}">${FORMALITY_LABELS[v.formality]}</span></div>
           <input type="range" min="1" max="5" step="1" value="${v.formality}" data-formality="${a.id}" aria-label="Formality for ${escapeHtml(a.name)}" />
-          <div class="range-ends"><span>Casual</span><span>Formal</span></div>
         </div>
         <div class="vp-field">
           <div class="vp-label">Emoji</div>
@@ -929,46 +977,57 @@ function voicePanelHTML(a) {
             <button type="button" class="${v.length === "detailed" ? "selected" : ""}" role="radio" aria-checked="${v.length === "detailed"}" data-length="detailed" data-vagent="${a.id}">Detailed</button>
           </div>
         </div>
-      </div>
-      <div class="preview">
-        <div class="preview-head"><span>Sample: ${escapeHtml(vd.context)}</span><span class="preview-tag">Live preview</span></div>
-        <div class="bubble" data-preview="${a.id}" aria-live="polite">${escapeHtml(voiceMessage(a.id))}</div>
-      </div>
-      <button type="button" class="btn btn-sm btn-ghost apply-all" data-apply-all="${a.id}">Apply this voice to all agents</button>
+      </div>` : ""}
     </div>`;
 }
 
 function agentCardHTML(a, rec) {
   const on = !!state.agentsOn[a.id];
-  const isRec = rec.has(a.id);
+  const det = ui(`det-${a.id}`);
+  const vOpen = state.openVoice.has(a.id);
   const painLabel = selectedGroups()
     .filter((g) => g.subs.some((s) => subSel(s.id) && s.agents.includes(a.id)))
     .map((g) => g.short).join(" · ") || (a.alwaysOn ? "Coordinates the whole team" : "Optional add-on");
   return `
-    <div class="agent-card ${on ? "on" : ""} ${isRec ? "recommended" : ""}" data-agent="${a.id}">
+    <div class="agent-card ${on ? "on" : ""}" data-agent="${a.id}">
       <div class="agent-top">
-        <div class="agent-avatar" style="background:${a.color}">${a.icon}</div>
+        <div class="agent-avatar" aria-hidden="true">${a.icon}</div>
         <div class="agent-meta">
           <h3>${escapeHtml(a.name)}</h3>
-          <div class="agent-role">${escapeHtml(a.role)}</div>
+          <div class="agent-role">${escapeHtml(a.role)}${rec.has(a.id) && !a.alwaysOn ? ` · <span class="rec">Recommended</span>` : ""}</div>
         </div>
         <button type="button" class="agent-toggle" role="switch" aria-checked="${on}" aria-label="Toggle ${escapeHtml(a.name)}" data-toggle="${a.id}" ${a.alwaysOn ? "disabled" : ""}></button>
       </div>
-      ${isRec ? `<span class="agent-flag">Recommended for you</span>` : ""}
-      <p class="agent-desc">${escapeHtml(a.desc)}</p>
-      <span class="agent-pain">Solves: ${escapeHtml(painLabel)}</span>
-      <ul class="agent-tasks">${a.tasks.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+      <div class="agent-foot">
+        <button type="button" class="voice-chip" data-voice-toggle="${a.id}" aria-expanded="${vOpen}"><span class="vc-k">Voice</span> <span data-voice-current="${a.id}">${escapeHtml(voiceLabel(state.voices[a.id]))}</span> <span class="vc-chev" aria-hidden="true">${vOpen ? "▴" : "▾"}</span></button>
+        <button type="button" class="link-btn" data-ui="det-${a.id}" aria-expanded="${det}">${det ? "Less" : "Details"}</button>
+      </div>
+      ${det ? `
+      <div class="agent-details reveal" data-r="det-${a.id}">
+        <p class="agent-desc">${escapeHtml(a.desc)}</p>
+        <span class="agent-pain">Solves: ${escapeHtml(painLabel)}</span>
+        <ul class="agent-tasks">${a.tasks.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+      </div>` : ""}
       ${voicePanelHTML(a)}
     </div>`;
 }
 
 function renderAgents() {
   const rec = recommendedAgents();
+  const main = AGENTS.filter((a) => rec.has(a.id) || a.alwaysOn);
+  const others = AGENTS.filter((a) => !main.includes(a));
+  const groups = selectedGroups().map((g) => g.short);
   return `
     <div class="screen-eyebrow">Your agent team</div>
-    <h1 class="screen-title">Meet the crew for ${escapeHtml(state.business.name)}</h1>
-    <p class="screen-sub">Based on the problems you picked (${escapeHtml(selectedGroups().map((g) => g.short).join(", ") || "none yet")}), we pre-selected a lean team. Toggle anyone on or off (Store Captain stays on to coordinate), and give each agent its own voice.</p>
-    <div class="agent-grid" id="agent-grid">${AGENTS.map((a) => agentCardHTML(a, rec)).join("")}</div>`;
+    <h1 class="screen-title">Meet your team</h1>
+    <p class="screen-sub">${groups.length ? `Picked for ${escapeHtml(groups.join(", "))}.` : "A lean starter team."}</p>
+    <div class="narrow wide" id="agent-grid">
+      <div class="agent-grid">${main.map((a) => agentCardHTML(a, rec)).join("")}</div>
+      ${others.length ? `
+      <button type="button" class="more-link" data-ui="moreAgents" aria-expanded="${ui("moreAgents")}">${ui("moreAgents") ? "Hide" : "Show"} more agents (${others.length})</button>
+      ${ui("moreAgents") ? `<div class="agent-grid reveal" data-r="moreAgents">${others.map((a) => agentCardHTML(a, rec)).join("")}</div>` : ""}` : ""}
+      ${screenNote("Voice samples are previews · Store Captain stays on to coordinate")}
+    </div>`;
 }
 
 function toolRowHTML(id, note) {
@@ -987,75 +1046,82 @@ function toolRowHTML(id, note) {
 function connectorsHTML() {
   const groups = selectedGroups();
   const shown = new Set();
+  const PER_GROUP = 3;
   const sections = groups.map((g) => {
-    const rows = g.connectors.map((c) => {
-      if (shown.has(c.id)) {
-        return "";
-      }
-      shown.add(c.id);
-      const also = groups.filter((o) => o.id !== g.id && o.connectors.some((x) => x.id === c.id)).map((o) => o.short);
-      return toolRowHTML(c.id, also.length ? `${CONNECTORS[c.id].desc} · also for ${also.join(", ")}` : "");
-    }).join("");
-    if (!rows) return "";
+    const ids = g.connectors.map((c) => c.id).filter((id) => !shown.has(id)).slice(0, PER_GROUP);
+    ids.forEach((id) => shown.add(id));
+    if (!ids.length) return "";
     return `
           <div class="conn-group" data-conn-group="${g.id}">
-            <h4 class="conn-group-head"><span class="group-icon xs" style="background:${g.color}" aria-hidden="true">${g.icon}</span>For “${escapeHtml(g.short)}”</h4>
-            <div class="tool-list">${rows}</div>
+            <h3 class="conn-group-head">${escapeHtml(g.short)}</h3>
+            <div class="tool-list">${ids.map((id) => toolRowHTML(id)).join("")}</div>
           </div>`;
   }).join("");
   const rest = Object.keys(CONNECTORS).filter((id) => !shown.has(id));
+  const open = state.showMore || !sections;
   return `
-        ${sections || `<p class="hint">No pain areas picked yet. Every connector is listed below.</p>`}
+        ${sections}
         ${rest.length ? `
         <div class="more-conn">
-          <button type="button" class="btn btn-ghost btn-sm more-toggle" data-more-toggle aria-expanded="${!!state.showMore || !sections}">${state.showMore || !sections ? "Hide" : "Show"} more connectors (${rest.length})</button>
-          ${state.showMore || !sections ? `<div class="conn-group" data-conn-group="more"><h4 class="conn-group-head">More connectors</h4><div class="tool-list">${rest.map((id) => toolRowHTML(id)).join("")}</div></div>` : ""}
+          <button type="button" class="more-link more-toggle" data-more-toggle aria-expanded="${open}">${open ? "Hide" : "Show"} more connectors (${rest.length})</button>
+          ${open ? `<div class="conn-group reveal" data-r="more" data-conn-group="more"><h3 class="conn-group-head sr-only">More connectors</h3><div class="tool-list">${rest.map((id) => toolRowHTML(id)).join("")}</div></div>` : ""}
         </div>` : ""}`;
 }
 
 function renderSetup() {
   const active = activeAgents();
+  const ap = APPROVALS.find((a) => a.id === state.approval) || APPROVALS[0];
   return `
     <div class="screen-eyebrow">Setting up</div>
     <h1 class="screen-title">Bring your work with you</h1>
-    <p class="screen-sub">Connect your apps so your team starts with context. Mock connections only; this demo never touches real accounts.</p>
-    <div class="setup-grid">
-      <section class="setup-section">
-        <h3>Your apps</h3>
-        <p class="hint">Only what your picked pains need, grouped by pain. Illustrative connections for the demo walkthrough.</p>
-        <div id="connectors">${connectorsHTML()}</div>
-      </section>
+    <p class="screen-sub">Connect your apps so your team starts with context.</p>
+    <div class="narrow wide">
+      <div id="connectors">${connectorsHTML()}</div>
 
-      <section class="setup-section" id="voice-summary">
-        <h3>Voices at a glance</h3>
-        <p class="hint">Each agent writes as ${escapeHtml(state.business.name)} in its own voice. Fine-tune on the Agents step, or set one voice for everyone.</p>
+      <section class="calm-sec" id="voice-summary" aria-labelledby="voices-h">
+        <h2 class="sec-title" id="voices-h">Voices</h2>
         <div class="vs-list">
-          ${active.map((a) => `
-            <div class="vs-row">
-              <div class="mini-avatar" style="background:${a.color}">${a.icon}</div>
-              <div class="vs-text"><strong>${escapeHtml(a.name)}</strong><span>${escapeHtml(voiceSummary(state.voices[a.id]))}</span></div>
-            </div>`).join("")}
-        </div>
-        <div class="vp-label" style="margin-top:14px">Apply to all agents</div>
-        <div class="preset-row" id="all-presets">
-          ${PRESETS.map((p) => {
-            const all = active.every((a) => state.voices[a.id].preset === p.id);
-            return `<button type="button" class="preset ${all ? "selected" : ""}" data-all-preset="${p.id}">${escapeHtml(p.label)}</button>`;
+          ${active.map((a) => {
+            const open = state.voiceEdit === a.id;
+            return `
+            <div class="vs-item ${open ? "open" : ""}">
+              <button type="button" class="vs-row" data-vs-row="${a.id}" aria-expanded="${open}">
+                <span class="mini-avatar" aria-hidden="true">${a.icon}</span>
+                <span class="vs-text"><strong>${escapeHtml(a.name)}</strong><span>${escapeHtml(voiceLabel(state.voices[a.id]))}</span></span>
+                <span class="vs-affordance" aria-hidden="true">${open ? "▴" : "✎"}</span>
+              </button>
+              ${open ? `
+              <div class="vs-panel reveal" data-r="vs-${a.id}">
+                ${presetChipsHTML(a)}
+                <p class="vs-sample" data-preview="${a.id}">${escapeHtml(blendBody(a.id, state.voices[a.id]))}</p>
+              </div>` : ""}
+            </div>`;
           }).join("")}
         </div>
-        <button type="button" class="btn btn-sm btn-ghost" data-goto="2" style="margin-top:12px">Fine-tune each agent's voice</button>
+        <button type="button" class="link-btn" data-ui="allVoices" aria-expanded="${ui("allVoices")}">${ui("allVoices") ? "Hide" : "Use one voice for everyone"}</button>
+        ${ui("allVoices") ? `
+        <div class="preset-row reveal" data-r="allVoices" id="all-presets">
+          ${PRESETS.map((p) => {
+            const all = active.every((a) => vPresets(state.voices[a.id]).join() === p.id);
+            return `<button type="button" class="preset ${all ? "selected" : ""}" data-all-preset="${p.id}">${escapeHtml(PRESET_SHORT[p.id])}</button>`;
+          }).join("")}
+        </div>` : ""}
       </section>
 
-      <section class="setup-section">
-        <h3>Approval preference</h3>
-        <p class="hint">Default is safest: ask before anything goes out.</p>
-        <div class="approval-options" id="approval-options">
+      <section class="calm-sec" aria-labelledby="appr-h">
+        <h2 class="sec-title sr-only" id="appr-h">Approvals</h2>
+        <button type="button" class="setting-row" data-ui="approvals" aria-expanded="${ui("approvals")}">
+          <span class="sr-k">Approvals</span><span class="sr-v">${escapeHtml(ap.title)}</span><span class="sr-chev" aria-hidden="true">${ui("approvals") ? "▴" : "›"}</span>
+        </button>
+        ${ui("approvals") ? `
+        <div class="approval-options reveal" data-r="approvals" id="approval-options">
           ${APPROVALS.map((a) => `
             <button type="button" class="option-card ${state.approval === a.id ? "selected" : ""}" data-approval="${a.id}">
               <strong>${escapeHtml(a.title)}</strong><span>${escapeHtml(a.sample)}</span>
             </button>`).join("")}
-        </div>
+        </div>` : ""}
       </section>
+      ${screenNote("Mock connections · nothing touches real accounts")}
     </div>`;
 }
 
@@ -1101,118 +1167,118 @@ function renderDashboard() {
   const revDelta = revPrev > 0 ? Math.round((rev / revPrev - 1) * 100) : 0;
   const mDelta = val("margin") - inp("marginPrev");
   const arrow = (n) => (n >= 0 ? "↑" : "↓");
+  const shownApprovals = ui("approvals") ? approvals : approvals.slice(0, 2);
+  const shownFeed = ui("feed") ? feed : feed.slice(0, 3);
+  const waiting = approvals.filter((a) => !state.approvalsResolved[a.id]).length;
+  const groups = selectedGroups().map((g) => g.short);
   return `
     <div class="dash-header">
-      <div>
-        <div class="screen-eyebrow">Day one</div>
-        <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
-        <p class="screen-sub" style="margin-bottom:0">A sample look at what your agents already handled, and what still needs your OK.${selectedGroups().length ? ` Working on: <strong>${escapeHtml(selectedGroups().map((g) => g.short).join(" · "))}</strong>.` : ""}</p>
-      </div>
-      <span class="sample-pill">⚑ Sample data · tap ⓘ for sources</span>
+      <div class="screen-eyebrow">Day one</div>
+      <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
+      ${groups.length ? `<p class="screen-sub">Focused on ${escapeHtml(groups.join(" · "))}</p>` : ""}
     </div>
-
-    <div class="kpi-row">
-      <div class="kpi">
-        <div class="label">Revenue (week) ${chip("revenue")}</div>
-        <div class="value" data-kpi="revenue">${fmt("money", rev)}</div>
-        <div class="delta ${revDelta < 0 ? "neg" : ""}">${arrow(revDelta)} ${Math.abs(revDelta)}% vs last week</div>
-        <div class="sample">Sample data</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Profit margin ${chip("margin")}</div>
-        <div class="value" data-kpi="margin">${fmt("pct", val("margin"))}</div>
-        <div class="delta ${mDelta < 0 ? "neg" : ""}">${arrow(mDelta)} ${Math.abs(mDelta).toFixed(1)} pts</div>
-        <div class="sample">Sample data</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Customer reply time ${chip("replyTime")}</div>
-        <div class="value" data-kpi="replyTime">${fmt("minutes", val("replyTime"))}</div>
-        <div class="delta">↓ from ${fmtDuration(inp("replyBeforeMin"))}</div>
-        <div class="sample">Sample data</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Hours saved ${chip("hoursSaved")}</div>
-        <div class="value" data-kpi="hoursSaved">${fmt("hours", val("hoursSaved"))}</div>
-        <div class="delta">~${fmt("money", val("dollarsProtected"))} protected ${chip("dollarsProtected")}</div>
-        <div class="sample">Illustrative</div>
-      </div>
-    </div>
-
-    <div class="dash-grid">
-      <section class="panel">
-        <div class="panel-head">
-          <h3>Needs your OK</h3>
-          <span class="count" id="approval-count">${approvals.filter((a) => !state.approvalsResolved[a.id]).length} waiting</span>
+    <div class="narrow wide">
+      <div class="kpi-row ${ui("kpis") ? "four" : ""}">
+        <div class="kpi">
+          <div class="label">Revenue ${chip("revenue")}</div>
+          <div class="value" data-kpi="revenue">${fmt("money", rev)}</div>
+          <div class="delta ${revDelta < 0 ? "neg" : ""}">${arrow(revDelta)} ${Math.abs(revDelta)}% vs last week</div>
         </div>
+        <div class="kpi">
+          <div class="label">Margin ${chip("margin")}</div>
+          <div class="value" data-kpi="margin">${fmt("pct", val("margin"))}</div>
+          <div class="delta ${mDelta < 0 ? "neg" : ""}">${arrow(mDelta)} ${Math.abs(mDelta).toFixed(1)} pts</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Hours saved ${chip("hoursSaved")}</div>
+          <div class="value" data-kpi="hoursSaved">${fmt("hours", val("hoursSaved"))}</div>
+          <div class="delta">~${fmt("money", val("dollarsProtected"))} protected ${chip("dollarsProtected")}</div>
+        </div>
+        ${ui("kpis") ? `
+        <div class="kpi reveal" data-r="kpis">
+          <div class="label">Reply time ${chip("replyTime")}</div>
+          <div class="value" data-kpi="replyTime">${fmt("minutes", val("replyTime"))}</div>
+          <div class="delta">↓ from ${fmtDuration(inp("replyBeforeMin"))}</div>
+        </div>` : ""}
+      </div>
+      <button type="button" class="more-link" data-ui="kpis" aria-expanded="${ui("kpis")}">${ui("kpis") ? "Fewer metrics" : "More metrics"}</button>
+
+      <section class="calm-sec" aria-labelledby="ok-h">
+        <div class="sec-head"><h2 class="sec-title" id="ok-h">Needs your OK</h2><span class="count" id="approval-count">${waiting} waiting</span></div>
         <div id="approval-list">
-          ${approvals.map((item) => {
+          ${shownApprovals.map((item) => {
             const agent = agentById(item.agentId);
             const resolved = state.approvalsResolved[item.id];
             const v = state.voices[item.agentId];
+            const g = agentGroup(item.agentId);
+            const dOpen = ui(`draft-${item.id}`);
             return `
               <div class="approval-item ${resolved ? "done" : ""} ${resolved === "edited" ? "edited" : ""}" data-approval-id="${item.id}">
                 <div class="approval-top">
-                  <div class="mini-avatar" style="background:${agent.color}">${agent.icon}</div>
+                  <div class="mini-avatar" aria-hidden="true">${agent.icon}</div>
                   <div class="approval-body">
-                    <strong>${escapeHtml(agent.name)} · ${escapeHtml(item.title)}${item.dp ? chip(item.dp) : ""}</strong>
-                    ${forTag(item.agentId)}<p>${escapeHtml(item.body)}</p>
-                    <div class="draft">
-                      <div class="draft-head"><span>Draft · ${escapeHtml(VOICE_LINES[item.agentId].context)}</span><span class="voice-tag">${escapeHtml(presetLabel(v.preset))} voice</span></div>
+                    <strong>${escapeHtml(item.title)}${item.dp ? chip(item.dp) : ""}</strong>
+                    <span class="approval-meta">${escapeHtml(agent.name)}${g ? ` · <span class="for-tag">${escapeHtml(g.short)}</span>` : ""}</span>
+                    <p>${escapeHtml(item.body)}</p>
+                    <button type="button" class="link-btn" data-ui="draft-${item.id}" aria-expanded="${dOpen}">${dOpen ? "Hide draft" : "View draft"}</button>
+                    ${dOpen ? `
+                    <div class="draft reveal" data-r="draft-${item.id}">
+                      <div class="draft-head"><span>${escapeHtml(VOICE_LINES[item.agentId].context)}</span><span class="voice-tag">${escapeHtml(voiceLabel(v))}</span></div>
                       <div class="draft-text">${escapeHtml(voiceMessage(item.agentId))}</div>
-                    </div>
+                    </div>` : ""}
                   </div>
                 </div>
                 <div class="approval-actions">
-                  <button type="button" class="btn btn-sm btn-approve" data-approve="${item.id}">Approve</button>
-                  <button type="button" class="btn btn-sm btn-edit" data-edit="${item.id}">Edit</button>
+                  <button type="button" class="btn btn-sm btn-primary btn-approve" data-approve="${item.id}">Approve</button>
+                  <button type="button" class="btn btn-sm btn-ghost btn-edit" data-edit="${item.id}">Edit</button>
                 </div>
-                <div class="approval-status">${resolved === "edited" ? "Edited & saved. The agent will revise." : "Approved. The agent will go ahead."}</div>
+                <div class="approval-status">${resolved === "edited" ? "Edited · the agent will revise" : "Approved · the agent will go ahead"}</div>
               </div>`;
           }).join("")}
         </div>
+        ${approvals.length > 2 ? `<button type="button" class="more-link" data-ui="approvals" aria-expanded="${ui("approvals")}">${ui("approvals") ? "Show fewer" : `Show ${approvals.length - 2} more`}</button>` : ""}
       </section>
 
-      <section class="panel">
-        <div class="panel-head"><h3>Agent activity</h3><span class="count">This week</span></div>
+      <section class="calm-sec" aria-labelledby="act-h">
+        <div class="sec-head"><h2 class="sec-title" id="act-h">What your team did</h2><span class="count">This week</span></div>
         <div>
-          ${feed.map((f) => {
+          ${shownFeed.map((f) => {
             const agent = agentById(f.agentId);
             return `
               <div class="feed-item">
-                <div class="mini-avatar" style="background:${agent.color}">${agent.icon}</div>
-                <div class="feed-body">
-                  <strong>${escapeHtml(agent.name)}</strong>
-                  <p>${escapeHtml(f.text)}${f.dp ? chip(f.dp) : ""}</p>
-                  ${forTag(f.agentId)}
-                  ${f.voice ? `<span class="voice-tag">${escapeHtml(presetLabel(state.voices[f.agentId].preset))} voice</span>` : ""}
-                </div>
+                <div class="mini-avatar" aria-hidden="true">${agent.icon}</div>
+                <div class="feed-body"><p>${escapeHtml(f.text)}${f.dp ? chip(f.dp) : ""}</p><span class="feed-sub">${escapeHtml(agent.name)}</span></div>
                 <div class="feed-time">${f.time}</div>
               </div>`;
           }).join("")}
         </div>
+        ${feed.length > 3 ? `<button type="button" class="more-link" data-ui="feed" aria-expanded="${ui("feed")}">${ui("feed") ? "Show less" : `Show all ${feed.length}`}</button>` : ""}
       </section>
+      ${screenNote()}
     </div>`;
 }
 
-/* ---------- Home (final screen): prompt box + "Your tasks" ---------- */
 function homeTasks() {
-  const tasks = [];
+  const waiting = [], working = [], done = [];
   sampleApprovals().forEach((a) => {
-    const g = agentGroup(a.agentId);
-    tasks.push({ agentId: a.agentId, title: a.title, status: state.approvalsResolved[a.id] === "approved" ? "Done · approved by you" : state.approvalsResolved[a.id] === "edited" ? "Revising your edit" : "Waiting on your approval", wait: !state.approvalsResolved[a.id], group: g });
+    const r = state.approvalsResolved[a.id];
+    const t = { agentId: a.agentId, title: a.title, status: r === "approved" ? "Done · approved by you" : r === "edited" ? "Revising your edit" : "Waiting on your approval", wait: !r };
+    (r ? done : waiting).push(t);
   });
-  sampleFeed().slice(0, 3).forEach((f) => tasks.push({ agentId: f.agentId, title: f.text.replace(/^(Replied to|Flagged|Confirmed|Grouped|Queued|Compiled)/, (m) => ({ "Replied to": "Replying to", Flagged: "Watching", Confirmed: "Confirming", Grouped: "Grouping", Queued: "Drafting", Compiled: "Compiling" }[m])), status: "Working on it", wait: false }));
-  (state.homeTasks || []).forEach((t) => tasks.unshift({ agentId: "captain", title: t, status: "Working on it", wait: false, mine: true }));
-  return tasks.slice(0, 7);
+  const verb = { "Replied to": "Replying to", Flagged: "Watching", Confirmed: "Confirming", Grouped: "Grouping", Queued: "Drafting", Compiled: "Compiling" };
+  sampleFeed().slice(0, 3).forEach((f) => working.push({ agentId: f.agentId, title: f.text.replace(/^(Replied to|Flagged|Confirmed|Grouped|Queued|Compiled)/, (m) => verb[m]), status: "Working on it", wait: false }));
+  const mine = (state.homeTasks || []).slice().reverse().map((t) => ({ agentId: "captain", title: t, status: "Working on it", wait: false }));
+  return [...mine, ...waiting.slice(0, 2), ...working.slice(0, 2), ...waiting.slice(2), ...working.slice(2), ...done];
 }
 function homeHTML() {
   const tasks = homeTasks();
+  const shown = ui("tasks") ? tasks : tasks.slice(0, 4);
   return `
     <section class="home" aria-label="Home">
       <h1 class="home-title">Good afternoon, ${escapeHtml(BUSINESS_CONFIG.ownerFirstName)}</h1>
       <form class="prompt-box" id="prompt-form">
         <label class="sr-only" for="prompt-input">Work with Gemini</label>
-        <div class="prompt-row"><span class="prompt-pin" aria-hidden="true">◎</span><input id="prompt-input" type="text" placeholder="Work with Gemini" autocomplete="off" /></div>
+        <div class="prompt-row"><input id="prompt-input" type="text" placeholder="Work with Gemini" autocomplete="off" /></div>
         <div class="prompt-actions">
           <button type="button" class="prompt-plus" aria-label="Add" data-prompt-plus>+</button>
           <span class="prompt-mode">Auto <span aria-hidden="true">⌄</span></span>
@@ -1222,17 +1288,17 @@ function homeHTML() {
       <div class="tasks">
         <h2 class="tasks-head">Your tasks</h2>
         <ul class="task-list" id="task-list">
-          ${tasks.map((t) => {
+          ${shown.map((t) => {
             const a = agentById(t.agentId);
             return `<li class="task ${t.wait ? "waiting" : ""}">
               <button type="button" class="task-btn" ${t.wait ? `data-goto-dash` : ""}>
-                <span class="task-title">${a.icon} ${escapeHtml(t.title)}</span>
-                <span class="task-status">${escapeHtml(a.name)} · ${escapeHtml(t.status)}</span>
+                <span class="task-title">${escapeHtml(t.title)}</span>
+                <span class="task-status">${escapeHtml(t.status)} · ${escapeHtml(a.name)}</span>
               </button>
             </li>`;
           }).join("")}
         </ul>
-        <p class="tasks-note">Sample tasks · illustrative</p>
+        ${tasks.length > 4 ? `<button type="button" class="more-link" data-ui="tasks" aria-expanded="${ui("tasks")}">${ui("tasks") ? "Show fewer" : `Show all ${tasks.length}`}</button>` : ""}
       </div>
     </section>`;
 }
@@ -1242,52 +1308,58 @@ function renderClosing() {
   const agents = activeAgents();
   return `
     ${homeHTML()}
-    <div class="close-wrap">
-      <div class="screen-eyebrow">Your setup at a glance</div>
-      <h2 class="screen-title sm">From busywork to a quiet crew</h2>
-      <p class="screen-sub" style="margin-left:auto;margin-right:auto;text-align:center">Here's the story you just walked through for ${escapeHtml(state.business.name)}.</p>
-      <div class="close-card">
+    <div class="narrow">
+      <button type="button" class="setting-row summary-toggle" data-ui="summary" aria-expanded="${ui("summary")}">
+        <span class="sr-k">Your setup</span><span class="sr-v">${val("sel_pains")} problems · ${agents.length} agents · ${val("sel_tools")} apps</span><span class="sr-chev" aria-hidden="true">${ui("summary") ? "▴" : "›"}</span>
+      </button>
+      ${ui("summary") ? `
+      <div class="close-card reveal" data-r="summary">
         <div class="summary-path">
           <div class="summary-box">
             <h4>Pain areas</h4>
-            <ul>${pains.map((g) => `<li>${g.icon} ${escapeHtml(g.short)} <span class="voice-tag">${countIn(g)} picked</span></li>`).join("") || "<li>None selected</li>"}</ul>
+            <ul>${pains.map((g) => `<li>${g.icon} ${escapeHtml(g.short)} <span class="voice-tag">${countIn(g)}</span></li>`).join("") || "<li>None selected</li>"}</ul>
           </div>
-          <div class="summary-arrow" aria-hidden="true">→</div>
           <div class="summary-box">
             <h4>Agents</h4>
-            <ul>${agents.slice(0, 5).map((a) => `<li>${a.icon} ${escapeHtml(a.name)} <span class="voice-tag">${escapeHtml(presetLabel(state.voices[a.id].preset))}</span></li>`).join("")}</ul>
+            <ul>${agents.slice(0, 5).map((a) => `<li>${a.icon} ${escapeHtml(a.name)} <span class="voice-tag">${escapeHtml(voiceLabel(state.voices[a.id]))}</span></li>`).join("")}</ul>
           </div>
-          <div class="summary-arrow" aria-hidden="true">→</div>
           <div class="summary-box">
             <h4>Impact</h4>
             <ul>
               <li>~${Math.round(val("hoursSaved"))} hrs/week back ${chip("hoursSaved")}</li>
               <li>~${fmt("money", val("dollarsProtected"))}/week protected ${chip("dollarsProtected")}</li>
-              <li>You stay in the loop</li>
             </ul>
           </div>
         </div>
         <div class="impact-row">
           <div class="impact-tile"><div class="n">${val("sel_pains") || "—"} ${chip("sel_pains")}</div><div class="l">Problems picked</div></div>
           <div class="impact-tile"><div class="n">${agents.length} ${chip("sel_agents")}</div><div class="l">Agents on team</div></div>
-          <div class="impact-tile"><div class="n">${val("sel_tools")} ${chip("sel_tools")}</div><div class="l">Tools connected</div></div>
+          <div class="impact-tile"><div class="n">${val("sel_tools")} ${chip("sel_tools")}</div><div class="l">Apps connected</div></div>
         </div>
-        <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:18px">Impact figures are illustrative estimates from this demo, not a performance guarantee.</p>
-        <div class="close-actions">
-          <button type="button" class="btn btn-primary btn-launch" id="cta-start">Get started</button>
-          <button type="button" class="btn btn-ghost" id="cta-restart">Restart demo</button>
-        </div>
-      </div>
-      <p class="close-note">Gemini · agent team demo for Paws &amp; Pantry · sample, illustrative data</p>
+      </div>` : ""}
+      <div class="close-actions"><button type="button" class="link-btn" id="cta-restart">Restart demo</button></div>
+      ${screenNote("Gemini agent team demo for Paws &amp; Pantry · sample data, not a performance guarantee")}
     </div>`;
 }
 
 /* ---------- Bindings ---------- */
-function replaceAgentCard(id) {
+function replaceAgentCard(id, reveal) {
   const el = document.querySelector(`.agent-card[data-agent="${id}"]`);
-  if (el) el.outerHTML = agentCardHTML(agentById(id), recommendedAgents());
+  if (!el) return;
+  el.outerHTML = agentCardHTML(agentById(id), recommendedAgents());
+  settleReveals(document.querySelector(`.agent-card[data-agent="${id}"]`), reveal);
+}
+/* Only the disclosure the user just opened animates; everything re-rendered around it stays put. */
+function settleReveals(root, key) {
+  root?.querySelectorAll(".reveal").forEach((el) => { if (!key || el.dataset.r !== key) el.classList.add("static"); });
 }
 function setVoice(id, patch) { Object.assign(state.voices[id], patch); }
+
+function handlePreset(btn) {
+  const id = btn.dataset.vagent;
+  const hint = togglePreset(state.voices[id], btn.dataset.preset);
+  state.voiceHint = hint ? { id, text: hint } : null;
+}
 
 function bindScreen() {
   if (state.step === 0) {
@@ -1301,9 +1373,9 @@ function bindScreen() {
   }
 
   if (state.step === 1) {
-    stage.querySelectorAll(".group-list, .picked-row").forEach((el) => el.addEventListener("click", (e) => {
+    document.getElementById("group-list")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-group]"); if (b) openGroup(b.dataset.group);
-    }));
+    });
     setupScrollHint();
     stage.querySelectorAll("[data-back-menu]").forEach((b) => b.addEventListener("click", backToMenu));
     stage.querySelector("[data-select-all]")?.addEventListener("click", (e) => {
@@ -1339,19 +1411,16 @@ function bindScreen() {
     grid?.addEventListener("click", (e) => {
       const t = e.target;
       const toggle = t.closest("[data-toggle]");
-      if (toggle) { if (toggle.disabled) return; state.agentsOn[toggle.dataset.toggle] = !state.agentsOn[toggle.dataset.toggle]; state._agentsTouched = true; render({ keepScroll: true }); return; }
+      if (toggle) { if (toggle.disabled) return; state.agentsOn[toggle.dataset.toggle] = !state.agentsOn[toggle.dataset.toggle]; state._agentsTouched = true; replaceAgentCard(toggle.dataset.toggle); setNav(); return; }
       const vt = t.closest("[data-voice-toggle]");
       if (vt) {
         const id = vt.dataset.voiceToggle;
-        if (state.openVoice.has(id)) state.openVoice.delete(id); else state.openVoice.add(id);
-        replaceAgentCard(id); return;
+        const opening = !state.openVoice.has(id);
+        if (opening) state.openVoice.add(id); else state.openVoice.delete(id);
+        replaceAgentCard(id, opening ? `voice-${id}` : null); return;
       }
       const pr = t.closest("[data-preset]");
-      if (pr) {
-        const p = PRESETS.find((x) => x.id === pr.dataset.preset);
-        setVoice(pr.dataset.vagent, { preset: p.id, formality: p.formality, emoji: p.emoji });
-        replaceAgentCard(pr.dataset.vagent); return;
-      }
+      if (pr) { handlePreset(pr); replaceAgentCard(pr.dataset.vagent); state.voiceHint = null; return; }
       const em = t.closest("[data-emoji]");
       if (em) { const id = em.dataset.emoji; setVoice(id, { emoji: !state.voices[id].emoji }); replaceAgentCard(id); return; }
       const ln = t.closest("[data-length]");
@@ -1359,9 +1428,9 @@ function bindScreen() {
       const all = t.closest("[data-apply-all]");
       if (all) {
         const src = state.voices[all.dataset.applyAll];
-        AGENTS.forEach((a) => { state.voices[a.id] = { ...src }; });
+        AGENTS.forEach((a) => { state.voices[a.id] = { ...src, presets: [...vPresets(src)] }; });
         render({ keepScroll: true });
-        toast(`"${presetLabel(src.preset)}" voice applied to all ${AGENTS.length} agents`);
+        toast(`${voiceLabel(src)} voice applied to all ${AGENTS.length} agents`);
       }
     });
     grid?.addEventListener("input", (e) => {
@@ -1370,25 +1439,25 @@ function bindScreen() {
       setVoice(id, { formality: Number(r.value) });
       document.querySelector(`[data-formality-label="${id}"]`).textContent = FORMALITY_LABELS[state.voices[id].formality];
       document.querySelector(`[data-preview="${id}"]`).textContent = voiceMessage(id);
-      document.querySelector(`[data-voice-current="${id}"]`).textContent = voiceSummary(state.voices[id]);
     });
   }
 
   if (state.step === 3) {
     document.getElementById("connectors")?.addEventListener("click", (e) => {
-      if (e.target.closest("[data-more-toggle]")) { state.showMore = !state.showMore; render({ keepScroll: true }); return; }
+      if (e.target.closest("[data-more-toggle]")) { state.showMore = !state.showMore; render({ keepScroll: true, reveal: state.showMore ? "more" : null }); return; }
       const b = e.target.closest("[data-tool-btn]"); if (!b) return; state.tools[b.dataset.toolBtn] = !state.tools[b.dataset.toolBtn]; render({ keepScroll: true });
     });
     document.getElementById("voice-summary")?.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-vs-row]");
+      if (row) { const id = row.dataset.vsRow; state.voiceEdit = state.voiceEdit === id ? null : id; state.voiceHint = null; render({ keepScroll: true, reveal: state.voiceEdit ? `vs-${id}` : null }); stage.querySelector(`[data-vs-row="${id}"]`)?.focus({ preventScroll: true }); return; }
+      const pr = e.target.closest("[data-preset]");
+      if (pr) { handlePreset(pr); render({ keepScroll: true }); state.voiceHint = null; return; }
       const b = e.target.closest("[data-all-preset]");
       if (b) {
-        const p = PRESETS.find((x) => x.id === b.dataset.allPreset);
-        AGENTS.forEach((a) => { state.voices[a.id] = { ...state.voices[a.id], preset: p.id, formality: p.formality, emoji: p.emoji }; });
+        AGENTS.forEach((a) => setPresetsSingle(state.voices[a.id], b.dataset.allPreset));
         render({ keepScroll: true });
-        toast(`"${p.label}" voice applied to all agents`);
-        return;
+        toast(`${PRESET_SHORT[b.dataset.allPreset]} voice applied to all agents`);
       }
-      const g = e.target.closest("[data-goto]"); if (g) go(Number(g.dataset.goto));
     });
     document.getElementById("approval-options")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-approval]"); if (!b) return; state.approval = b.dataset.approval; render({ keepScroll: true });
@@ -1412,14 +1481,24 @@ function bindScreen() {
       if (!t) { inpEl.focus(); return; }
       state.homeTasks.push(t.length > 80 ? t.slice(0, 78) + "…" : t);
       render({ keepScroll: true });
-      toast("Store Captain picked it up (demo). It'll show in Your tasks.");
+      toast("Store Captain picked it up (demo).");
     });
     document.querySelector("[data-prompt-plus]")?.addEventListener("click", () => toast("In the full product, you could attach files or photos here."));
     document.getElementById("task-list")?.addEventListener("click", (e) => { if (e.target.closest("[data-goto-dash]")) go(4); });
-    document.getElementById("cta-start")?.addEventListener("click", () => toast("In a real pitch, this opens signup. Nice work!"));
     document.getElementById("cta-restart")?.addEventListener("click", restartDemo);
   }
 }
+
+/* One delegated handler for every "show more / details" disclosure (state.ui). */
+stage.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ui]");
+  if (!b || !stage.contains(b)) return;
+  const k = b.dataset.ui;
+  state.ui[k] = !state.ui[k];
+  render({ keepScroll: true, reveal: state.ui[k] ? k : null });
+  const again = stage.querySelector(`[data-ui="${CSS.escape(k)}"]`);
+  again?.focus({ preventScroll: true });
+});
 
 function updateTallyLive() {
   const h = document.getElementById("tally-hours");
@@ -1513,7 +1592,7 @@ function runLaunchSequence() {
       icons.querySelectorAll(".learn-icon").forEach((el) => el.classList.remove("active"));
       title.textContent = "Here\u2019s what I learned.";
       status.textContent = `All done. ${factItems.length} things your team will remember (sample).`;
-      team.innerHTML = agents.map((a) => `<li class="online"><span class="dot"></span>${a.icon} ${escapeHtml(a.name)} · online, ${escapeHtml(presetLabel(state.voices[a.id].preset).toLowerCase())} voice</li>`).join("");
+      team.innerHTML = agents.map((a) => `<li class="online" title="${escapeHtml(a.name)} · ${escapeHtml(voiceLabel(state.voices[a.id]))} voice"><span aria-hidden="true">${a.icon}</span><span class="sr-only">${escapeHtml(a.name)} online</span></li>`).join("") + `<li class="team-cap">Your team is online</li>`;
       team.hidden = false;
       cont.hidden = false;
       cont.focus({ preventScroll: true });
