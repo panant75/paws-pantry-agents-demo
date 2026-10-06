@@ -2036,8 +2036,19 @@ body { letter-spacing: -0.005em; }
   color: var(--teal-mid);
 }
 .est-note {
+  display: block;
+  margin-top: 2px;
   color: var(--muted);
   font-weight: 400;
+}
+.estimate-inputs input[type="number"]::-webkit-outer-spin-button,
+.estimate-inputs input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.estimate-inputs input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 .quiet-add-est {
   background: none;

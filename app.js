@@ -1553,7 +1553,7 @@ function renderDashboard() {
         <div class="kpi">
           <div class="label">Hours this costs you <button type="button" class="edit-est-btn" data-edit-estimates aria-label="Edit estimates">Edit</button></div>
           <div class="value" data-kpi="merchantHours">${fmtEstHours(merchantReportedHours())}</div>
-          <div class="delta">~${fmt("money", merchantReportedCost())}/week <span class="est-note">· based on your estimates</span></div>
+          <div class="delta">~${fmt("money", merchantReportedCost())}/week <span class="est-note">based on your estimates</span></div>
         </div>` : ""}
         ${ui("kpis") ? `
         <div class="kpi reveal" data-r="kpis">
