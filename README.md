@@ -14,6 +14,20 @@ python3 -m http.server 8877
 
 No backend. Optional Google Fonts at runtime (falls back to system UI fonts offline).
 
+## Start & Step 1 (v6.3)
+- The demo always opens on the welcome splash: fresh load, reload, the short link, back-forward cache restores and "Restart demo". Nothing is persisted; the history state is reset to step 0.
+- Step 1 is pick-first: 7 business-type cards (Pet food & supplies, Coffee shop / café, Bakery, Boutique / apparel, Salon / spa, Restaurant, Other + text), team size chips (Just me, 2–5, 6–20, 20+) and an optional name. Nothing is preselected, and Continue stays disabled until a type is picked. Leaving the name blank uses a sample name per type (Pet food → Paws & Pantry). Agent content stays Paws & Pantry.
+
+## "See it in action" guided scenario (v7)
+Launch it from the Home card or from the inventory insight sheet ("Watch the team clear this stock"). There are 5 beats, one per screen, all sample/illustrative:
+1. Pantry Stock scans Square POS + inventory and finds 48 salmon pouches, 21 days to expiry, selling 6/week: ~30 units at risk ($210).
+2. Growth Spark builds the Salmon Supper Bundle (3 pouches + treat, 20% off) with copy in its chosen voice, an Instagram preview and an Email/SMS tab. Cash Sense confirms it's still 31% margin.
+3. Approval: "Approve & publish" or Edit. Nothing auto-approves.
+4. Website before/after: storefront banner + product badge, "Published to website · Instagram · Email list (412)".
+5. "Weekend later…" then results with ⓘ source chips (27 of 30 sold, $187 recovered, $108 waste avoided, 6 new customers, reach/clicks), a small chart and a follow-up fix ("Lower salmon reorder qty by 20%": Apply adds a Home task).
+
+Beats 1, 2 and 4 auto-advance (a thin timer on Continue). Tapping a tab or a source chip pauses auto-advance, and × / Esc closes. With reduced motion there's no scan animation and no auto-advance.
+
 ## Activity insight sheets (v6)
 Tapping ⓘ on an activity row or approval now opens a sheet that answers *what happened, why, and what to do about it* (all sample/illustrative, labeled once per sheet):
 - **What happened:** a short list you tap to expand, one item open at a time.

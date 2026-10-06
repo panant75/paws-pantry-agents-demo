@@ -13,6 +13,37 @@ const BUSINESS_CONFIG = {
   tagline: "Neighborhood pet-food shop with subscription delivery",
 };
 
+/* Step 1 choices. Nothing is preselected; Pet food uses the Paws & Pantry sample, others swap name/type text. */
+const BIZ_TYPES = [
+  { id: "pet", label: "Pet food & supplies", icon: "🐾", noun: "pet food shop", sample: "Paws & Pantry" },
+  { id: "cafe", label: "Coffee shop / café", icon: "☕", noun: "café", sample: "Corner Café" },
+  { id: "bakery", label: "Bakery", icon: "🥐", noun: "bakery", sample: "Rise Bakery" },
+  { id: "boutique", label: "Boutique / apparel", icon: "👗", noun: "boutique", sample: "Thread & Co." },
+  { id: "salon", label: "Salon / spa", icon: "💇", noun: "salon", sample: "Glow Studio" },
+  { id: "restaurant", label: "Restaurant", icon: "🍽️", noun: "restaurant", sample: "Elm Street Kitchen" },
+  { id: "other", label: "Other", icon: "✳️", noun: "business", sample: "Your shop" },
+];
+const BIZ_SIZES = [
+  { id: "solo", label: "Just me", phrase: "just you" },
+  { id: "2-5", label: "2–5", phrase: "2–5 people" },
+  { id: "6-20", label: "6–20", phrase: "6–20 people" },
+  { id: "20+", label: "20+", phrase: "20+ people" },
+];
+const bizType = () => BIZ_TYPES.find((t) => t.id === state.business.type);
+const bizSize = () => BIZ_SIZES.find((x) => x.id === state.business.size);
+function bizName() {
+  const n = (state.business.name || "").trim();
+  if (n) return n;
+  const t = bizType();
+  return t ? t.sample : BUSINESS_CONFIG.name;
+}
+function bizNoun() {
+  const t = bizType();
+  if (!t) return "business";
+  if (t.id === "other") return (state.business.other || "").trim().toLowerCase() || "business";
+  return t.noun;
+}
+
 const STEP_LABELS = ["Welcome", "Pains", "Agents", "Connect", "Dashboard", "Home"];
 
 /* Two-level, MECE pain structure. Hours/$ per sub-point are a fixed ILLUSTRATIVE typical weekly estimate (editable in the source card). */
@@ -211,6 +242,7 @@ const DEFAULT_INPUTS = (() => {
     replyMin: 11, replyBeforeMin: 240, savingsRate: 70, protectRate: 55,
     "act.faq": 12, "act.expiry": 4, "act.renewals": 18, "act.deliveries": 7,
     "act.lowMargin": 2, "act.igDrafts": 3, "act.reorder": 3, "act.atRisk": 2,
+    "scn.atRisk": 30, "scn.atRiskValue": 210, "scn.margin": 31, "scn.sold": 27, "scn.revenue": 187, "scn.waste": 108, "scn.newCust": 6, "scn.reach": 2140, "scn.clicks": 186,
   };
   ALL_SUBS.forEach((p) => { o[`subHours.${p.id}`] = p.hours; o[`subDollars.${p.id}`] = p.dollars; });
   return o;
@@ -221,7 +253,7 @@ const state = {};
 function freshState() {
   Object.assign(state, {
     step: 0,
-    business: { name: BUSINESS_CONFIG.name, type: BUSINESS_CONFIG.type, size: BUSINESS_CONFIG.size },
+    business: { name: "", type: null, size: null, other: "" },
     selectedSubs: [],
     painGroup: null,
     showMore: false,
@@ -349,6 +381,15 @@ const DP = {
   act_lowMargin: countDP("act.lowMargin", "Low-margin items flagged", "QuickBooks costs + POS prices", "Items whose margin fell below your 30% target"),
   act_igDrafts: countDP("act.igDrafts", "Instagram drafts queued", "Growth Spark drafts · awaiting review", "Posts drafted and waiting for your OK"),
   act_reorder: countDP("act.reorder", "Low-stock items in reorder", "Square inventory · below reorder point", "Items at or below their reorder point"),
+  scn_atRisk: countDP("scn.atRisk", "Salmon pouches at risk", "Square inventory · 48 on hand, 21 days to expiry", "On hand − (weekly sales × weeks to expiry): 48 − 6 × 3 = 30"),
+  scn_atRiskValue: { label: "Value at risk", kind: "money", source: "Square inventory × shelf price", formula: "Units at risk × $7 shelf price", inputs: () => [{ key: "scn.atRiskValue", label: "Value at risk", unit: "$" }], compute: () => inp("scn.atRiskValue"), noOverride: true, updated: SAMPLE_SYNC },
+  scn_margin: { label: "Bundle margin", kind: "pct", source: "QuickBooks unit costs · Cash Sense check", formula: "($20.80 bundle price − $14.40 cost) ÷ $20.80", inputs: () => [{ key: "scn.margin", label: "Bundle margin", unit: "%" }], compute: () => inp("scn.margin"), noOverride: true, updated: SAMPLE_SYNC },
+  scn_sold: countDP("scn.sold", "Pouches sold in bundles", "Shopify + Square orders tagged SALMON-BUNDLE · Fri–Sun", "9 bundles × 3 pouches"),
+  scn_revenue: { label: "Revenue recovered", kind: "money", source: "Shopify + Square · bundle orders Fri–Sun", formula: "9 bundles × $20.80", inputs: () => [{ key: "scn.revenue", label: "Revenue recovered", unit: "$" }], compute: () => inp("scn.revenue"), noOverride: true, updated: "Sample · Monday after the promo" },
+  scn_waste: { label: "Waste avoided", kind: "money", source: "Square inventory · unit cost", formula: "27 pouches sold before expiry × $4 unit cost", inputs: () => [{ key: "scn.waste", label: "Waste avoided", unit: "$" }], compute: () => inp("scn.waste"), noOverride: true, updated: "Sample · Monday after the promo" },
+  scn_newCust: countDP("scn.newCust", "New customers from the promo", "Shopify customers · first order used the bundle", "First-time buyers who ordered the bundle"),
+  scn_reach: countDP("scn.reach", "Promo reach", "Instagram insights + Klaviyo email opens", "Accounts reached + emails opened (clicks tracked separately)"),
+  scn_clicks: countDP("scn.clicks", "Promo clicks", "Instagram link taps + email clicks", "Total clicks to the bundle page"),
   act_atRisk: countDP("act.atRisk", "Subscriptions at risk", "Subscription activity · skips & 'pause' clicks", "Subscribers with 2+ skips or pause clicks in 30 days"),
   sel_pains: { label: "Problems picked", kind: "count", source: "Your choices in Step 2", formula: "Sub-problems you picked across the 5 pain areas", compute: () => state.selectedSubs.length, jump: 1, updated: "Live" },
   sel_agents: { label: "Agents on team", kind: "count", source: "Your choices in Step 3", formula: "Agents toggled on", compute: () => activeAgents().length, jump: 2, updated: "Live" },
@@ -380,7 +421,7 @@ function activeAgents() { return AGENTS.filter((a) => state.agentsOn[a.id]); }
 
 /* ---------- Voice message builder ---------- */
 function fillVars(s) {
-  return s.replace(/\{biz\}/g, state.business.name).replace(/\{street\}/g, BUSINESS_CONFIG.street);
+  return s.replace(/\{biz\}/g, bizName()).replace(/\{street\}/g, BUSINESS_CONFIG.street);
 }
 /* Multi-select voices: up to 3 presets blend into one voice. The first pick sets the base line;
    extra picks layer on composable phrasing. Conflicting pairs can't be combined. */
@@ -462,9 +503,9 @@ function voiceMessage(agentId, v = state.voices[agentId]) {
   if (!toName && vd.cta) body += ` ${vd.cta[v.formality]}`;
   parts.push(body);
   if (!toName) {
-    if (v.length === "detailed") parts.push(`#${state.business.name.replace(/[^A-Za-z0-9]/g, "")} #ShopLocal${v.emoji ? " 🐾" : ""}`);
+    if (v.length === "detailed") parts.push(`#${bizName().replace(/[^A-Za-z0-9]/g, "")} #ShopLocal${v.emoji ? " 🐾" : ""}`);
   } else if (v.length === "detailed" || v.formality >= 4) {
-    parts.push(signoff(v.formality, vd.from === "agent" ? agent.name : state.business.name));
+    parts.push(signoff(v.formality, vd.from === "agent" ? agent.name : bizName()));
   }
   return parts.join("\n");
 }
@@ -529,6 +570,7 @@ const FIXES = {
   fx_slot: { title: "Nudge same-block customers to the shared Tuesday slot", agents: ["ship"], impact: "~1 hour saved per route" },
   fx_price: { title: "Raise raw bites by $1.50 to restore margin", agents: ["cash"], impact: "Back to ~30% margin on that line" },
   fx_min: { title: "Set a $25 minimum for free delivery", agents: ["cash", "ship"], impact: "Recovers ~$40/week in fees" },
+  fx_reorder20: { title: "Lower salmon pouch reorder qty by 20%", agents: ["pantry"], impact: "Avoids most of next month's excess" },
   fx_evergreen: { title: "Auto-approve evergreen posts; review only promos", agents: ["growth"], impact: "Posts go out ~2 days sooner" },
 };
 /* Split a total across weights (largest remainder) so theme counts always add up to the metric. */
@@ -700,6 +742,7 @@ function insightHTML(id) {
       }).join("")}
     </section>`);
   }
+  if (id === "act_expiry") parts.push(`<button type="button" class="scn-inline" data-scenario>▶ Watch the team clear this stock</button>`);
   return parts.join("");
 }
 
@@ -942,7 +985,7 @@ function setNav() {
   document.getElementById("navfoot")?.classList.toggle("sub-mode", inSub);
   btnNext.classList.toggle("btn-launch", state.step === 3);
   let ok = true; let hint = "";
-  if (state.step === 0) ok = !!(state.business.name.trim() && state.business.type && state.business.size);
+  if (state.step === 0) ok = !!state.business.type;
   else if (state.step === 1) {
     const n = nPicked;
     ok = inSub || n >= 1;
@@ -1017,6 +1060,7 @@ document.addEventListener("touchend", (e) => {
 
 function render(opts = {}) {
   closePop();
+  if (typeof scn !== "undefined" && scn.open) scnPaint(false);
   const y = window.scrollY;
   renderProgress();
   setNav();
@@ -1038,29 +1082,24 @@ const ui = (k) => !!state.ui[k];
 const screenNote = (t = "Sample data · tap ⓘ to see where a number comes from") => `<p class="screen-note">${t}</p>`;
 
 function renderWelcome() {
-  const sizes = ["Just me", "1–5 people", "6–20 people", "20+ people"];
-  const types = ["Pet food shop", "Cafe / bakery", "Boutique retail", "Home services", "Salon / spa", "Other local business"];
+  const b = state.business;
   return `
-    <div class="focus">
+    <div class="focus pick">
       <h1 class="screen-title">What do you do?</h1>
-      <label class="sr-only" for="biz-name">Business name</label>
-      <input id="biz-name" class="big-input" type="text" value="${escapeHtml(state.business.name)}" autocomplete="organization" placeholder="Your business name" />
-      <button type="button" class="biz-meta" data-ui="biz" aria-expanded="${ui("biz")}">${escapeHtml(state.business.type)} · ${escapeHtml(state.business.size)} <span>${ui("biz") ? "Done" : "Change"}</span></button>
-      ${ui("biz") ? `
-      <div class="focus-fields reveal" data-r="biz">
-        <div class="field">
-          <label>Kind of business</label>
-          <div class="chip-row" id="type-chips">
-            ${types.map((t) => `<button type="button" class="chip ${state.business.type === t ? "selected" : ""}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("")}
-          </div>
+      <div class="type-grid" role="radiogroup" aria-label="Type of business" id="type-chips">
+        ${BIZ_TYPES.map((t) => `<button type="button" class="type-card ${b.type === t.id ? "selected" : ""}" role="radio" aria-checked="${b.type === t.id}" data-type="${t.id}"><span class="type-ico" aria-hidden="true">${t.icon}</span><span>${escapeHtml(t.label)}</span></button>`).join("")}
+      </div>
+      ${b.type === "other" ? `
+      <label class="sr-only" for="biz-other">What kind of business?</label>
+      <input id="biz-other" class="pick-input reveal" type="text" value="${escapeHtml(b.other)}" placeholder="What kind of business?" autocomplete="off" />` : ""}
+      <div class="pick-field">
+        <span class="pick-label" id="size-label">Team size</span>
+        <div class="chip-row size-row" role="radiogroup" aria-labelledby="size-label" id="size-chips">
+          ${BIZ_SIZES.map((x) => `<button type="button" class="chip ${b.size === x.id ? "selected" : ""}" role="radio" aria-checked="${b.size === x.id}" data-size="${x.id}">${escapeHtml(x.label)}</button>`).join("")}
         </div>
-        <div class="field">
-          <label>Team size</label>
-          <div class="chip-row" id="size-chips">
-            ${sizes.map((s) => `<button type="button" class="chip ${state.business.size === s ? "selected" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
-          </div>
-        </div>
-      </div>` : ""}
+      </div>
+      <label class="sr-only" for="biz-name">Business name (optional)</label>
+      <input id="biz-name" class="pick-input" type="text" value="${escapeHtml(b.name)}" autocomplete="organization" placeholder="Business name (optional), e.g. ${escapeHtml(bizType() ? bizType().sample : "Paws & Pantry")}" />
     </div>`;
 }
 
@@ -1373,7 +1412,7 @@ function renderDashboard() {
   const groups = selectedGroups().map((g) => g.short);
   return `
     <div class="dash-header">
-      <h1 class="screen-title">This week at ${escapeHtml(state.business.name)}</h1>
+      <h1 class="screen-title">This week at ${escapeHtml(bizName())}</h1>
     </div>
     <div class="narrow wide">
       <div class="kpi-row ${ui("kpis") ? "four" : ""}">
@@ -1487,6 +1526,11 @@ function homeHTML() {
       <div class="prompt-suggest" aria-label="Suggestions">
         ${["Best sellers this week", "Draft a promo"].map((q) => `<button type="button" class="suggest-pill" data-suggest="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}
       </div>
+      <button type="button" class="scn-launch" data-scenario>
+        <span class="scn-play" aria-hidden="true">▶</span>
+        <span class="scn-launch-text"><b>See it in action</b><span>Watch your team clear excess stock</span></span>
+        <span aria-hidden="true">›</span>
+      </button>
       <div class="tasks">
         <h2 class="tasks-head">Your tasks</h2>
         <ul class="task-list" id="task-list">
@@ -1561,8 +1605,9 @@ function handlePreset(btn) {
 function bindScreen() {
   if (state.step === 0) {
     document.getElementById("biz-name")?.addEventListener("input", (e) => { state.business.name = e.target.value; setNav(); });
+    document.getElementById("biz-other")?.addEventListener("input", (e) => { state.business.other = e.target.value; });
     document.getElementById("type-chips")?.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-type]"); if (!b) return; state.business.type = b.dataset.type; render({ keepScroll: true });
+      const b = e.target.closest("[data-type]"); if (!b) return; state.business.type = b.dataset.type; render({ keepScroll: true }); if (b.dataset.type === "other") document.getElementById("biz-other")?.focus({ preventScroll: true });
     });
     document.getElementById("size-chips")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-size]"); if (!b) return; state.business.size = b.dataset.size; render({ keepScroll: true });
@@ -1709,6 +1754,7 @@ function restartDemo() {
   closePop();
   freshState();
   go(0);
+  showSplash();
 }
 
 /* ---------- "Learning how you work" (runs after connectors) ---------- */
@@ -1756,7 +1802,7 @@ function runLaunchSequence() {
       return `<div class="learn-icon" data-learn="${id}"><span class="app-ico" style="--c:${k.color}">${k.initials}</span><span class="learn-icon-name">${escapeHtml(k.name.split(" (")[0].split(" or ")[0])}</span></div>`;
     }).join("");
     const factItems = [
-      { icon: "👤", text: `You run a ${state.business.type.toLowerCase()} with ${state.business.size.toLowerCase()}` },
+      { icon: "👤", text: `You run a ${bizNoun()}${bizSize() ? ` with ${bizSize().phrase}` : ""}` },
       ...sources.map((id) => ({ id, text: LEARN[id]?.fact || `Learned how you use ${CONNECTORS[id].name}` })),
     ];
     facts.innerHTML = "";
@@ -1808,15 +1854,269 @@ btnNext.addEventListener("click", async () => {
   go(state.step + 1);
 });
 
+
+/* ---------- "See it in action" guided scenario: clear excess stock (all SAMPLE / illustrative) ---------- */
+const SCN_BEATS = 5;
+const scn = { open: false, beat: 0, phase: 0, tab: "ig", view: "after", approved: false, timer: null, tick: null, paused: false, origin: null };
+const scnEl = document.createElement("div");
+scnEl.className = "scn";
+scnEl.id = "scenario";
+scnEl.setAttribute("role", "dialog");
+scnEl.setAttribute("aria-modal", "true");
+scnEl.setAttribute("aria-labelledby", "scn-title");
+scnEl.hidden = true;
+document.body.appendChild(scnEl);
+
+function promoCopy(kind) {
+  const v = state.voices.growth;
+  const ps = vPresets(v);
+  let body = kind === "sms"
+    ? "Weekend only: Salmon Supper Bundle, 3 salmon pouches + a treat, 20% off!"
+    : "Meet the Salmon Supper Bundle: 3 grain-free salmon pouches + a treat, 20% off this weekend only!";
+  if (ps.includes("concise")) body = body.split(/(?<=[.!?])\s+/)[0];
+  if (kind !== "sms") ps.forEach((id) => { const m = VOICE_MODS[id]; if (m) body += ` ${fillVars(m.post)}`; });
+  if (ps.includes("pro") || v.formality >= 4) body = body.replace(/!/g, ".");
+  if (v.emoji) body += " 🐟🐾";
+  return body;
+}
+const handle = () => "@" + bizName().toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+const siteHost = () => bizName().toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "") + ".shop";
+
+function scnBeatHTML() {
+  const b = scn.beat, ph = scn.phase;
+  const ag = (id) => { const a = agentById(id); return `<span class="scn-agent"><span aria-hidden="true">${a.icon}</span>${escapeHtml(a.name)}</span>`; };
+  if (b === 0) {
+    const rows = [["Grain-free kibble 12 lb", "18 · 9/wk"], ["Grain-free salmon pouches", "48 · 6/wk"], ["Dental chews", "4 · 11/wk"], ["Turkey & pumpkin pouches", "9 · 4/wk"]];
+    return `
+      ${ag("pantry")}
+      <h2 class="scn-title" id="scn-title" tabindex="-1">${ph ? "Found excess stock" : "Checking your stock…"}</h2>
+      <div class="scn-sources"><span class="app-ico" style="--c:#3E4348">Sq</span> Square POS <span class="scn-dot">·</span> <span class="app-ico" style="--c:#96BF48">In</span> Inventory</div>
+      <div class="scn-scan ${ph ? "done" : "scanning"}">
+        ${rows.map((r, i) => `<div class="scn-srow ${ph && i === 1 ? "hit" : ""}" style="--i:${i}"><span>${r[0]}</span><span>${r[1]}</span></div>`).join("")}
+        <span class="scn-beam" aria-hidden="true"></span>
+      </div>
+      ${ph ? `
+      <div class="scn-card reveal">
+        <strong>Grain-free salmon pouches</strong>
+        <div class="scn-facts"><span><b>48</b> units</span><span><b>21</b> days to expiry</span><span>selling <b>6</b>/week</span></div>
+        <p class="scn-result">→ ~${val("scn_atRisk")} units at risk (${fmt("money", val("scn_atRiskValue"))}) ${chip("scn_atRiskValue")}</p>
+      </div>` : ""}`;
+  }
+  if (b === 1) {
+    const g = state.voices.growth;
+    return `
+      ${ag("growth")}
+      <h2 class="scn-title" id="scn-title" tabindex="-1">A promo to move it</h2>
+      <div class="scn-card offer">
+        <span class="scn-tag">Weekend offer</span>
+        <strong>Salmon Supper Bundle</strong>
+        <span>3 pouches + treat · 20% off this weekend · <b>$20.80</b> <s>$26</s></span>
+      </div>
+      <div class="seg scn-tabs" role="tablist" aria-label="Preview">
+        <button type="button" role="tab" aria-selected="${scn.tab === "ig"}" class="${scn.tab === "ig" ? "selected" : ""}" data-scn-tab="ig">Instagram</button>
+        <button type="button" role="tab" aria-selected="${scn.tab === "msg"}" class="${scn.tab === "msg" ? "selected" : ""}" data-scn-tab="msg">Email / SMS</button>
+      </div>
+      ${scn.tab === "ig" ? `
+      <div class="ig-post">
+        <div class="ig-head"><span class="ig-av" aria-hidden="true">🐾</span><b>${escapeHtml(handle())}</b></div>
+        <div class="ig-img" aria-hidden="true"><span>🐟</span><em>Weekend bundle · 20% off</em></div>
+        <p class="ig-cap">${escapeHtml(promoCopy("post"))}</p>
+      </div>` : `
+      <div class="msg-prev">
+        <div class="msg-row"><span class="ch-ico" style="--c:#EA4335">Email</span><b>Subject:</b> Salmon Supper Bundle · 20% off this weekend</div>
+        <div class="msg-row"><span class="ch-ico" style="--c:#34A853">SMS</span>${escapeHtml(promoCopy("sms"))} Reply STOP to opt out.</div>
+      </div>`}
+      <p class="scn-voice">In Growth Spark's voice · ${escapeHtml(voiceLabel(g))}</p>
+      <div class="scn-check"><span aria-hidden="true">💰</span><span>Cash Sense margin check: still <b>${fmt("pct", val("scn_margin"))}</b> margin ${chip("scn_margin")}</span><span class="ok" aria-hidden="true">✓</span></div>`;
+  }
+  if (b === 2) {
+    return `
+      ${ag("captain")}
+      <h2 class="scn-title" id="scn-title" tabindex="-1">${scn.approved ? "Approved" : "Ready when you are"}</h2>
+      <div class="scn-card">
+        <strong>Salmon Supper Bundle · 20% off</strong>
+        <ul class="scn-list">
+          <li>Website banner + product badge</li>
+          <li>Instagram post</li>
+          <li>Email list (412) + SMS</li>
+          <li>Fri 8 AM – Sun 8 PM</li>
+        </ul>
+      </div>
+      ${scn.approved
+        ? `<p class="scn-approved reveal">✓ Publishing now…</p>`
+        : `<div class="scn-approve"><button type="button" class="btn btn-primary" data-scn-approve>Approve &amp; publish</button><button type="button" class="btn btn-ghost" data-scn-edit>Edit</button></div>`}
+      <p class="scn-fine">Nothing goes live without your OK.</p>`;
+  }
+  if (b === 3) {
+    const after = scn.view === "after";
+    return `
+      ${ag("growth")}
+      <h2 class="scn-title" id="scn-title" tabindex="-1">Live on your website</h2>
+      <div class="seg scn-tabs" role="tablist" aria-label="Website">
+        <button type="button" role="tab" aria-selected="${!after}" class="${!after ? "selected" : ""}" data-scn-view="before">Before</button>
+        <button type="button" role="tab" aria-selected="${after}" class="${after ? "selected" : ""}" data-scn-view="after">After</button>
+      </div>
+      <div class="site ${after ? "after" : ""}">
+        <div class="site-bar"><span></span><span></span><span></span><em>${escapeHtml(siteHost())}</em></div>
+        <div class="site-head"><b>${escapeHtml(bizName())}</b><span>Shop · Subscribe · Visit</span></div>
+        <div class="site-hero">${after
+          ? `<div class="site-banner"><em>Weekend bundle · 20% off</em><b>Salmon Supper Bundle</b></div>`
+          : `<div class="site-banner plain"><b>Fresh food for happy pets</b></div>`}</div>
+        <div class="site-grid">
+          <div class="site-prod">${after ? `<span class="site-badge">Weekend bundle · 20% off</span>` : ""}<span class="site-img" aria-hidden="true">🐟</span><b>Grain-free salmon pouches</b><span>$7.00</span></div>
+          <div class="site-prod"><span class="site-img" aria-hidden="true">🦴</span><b>Dental chews</b><span>$12.00</span></div>
+        </div>
+      </div>
+      <p class="scn-published ${after ? "on" : ""}">${after ? "✓ Published to website · Instagram · Email list (412)" : "&nbsp;"}</p>`;
+  }
+  // b === 4
+  if (!ph) {
+    return `<div class="scn-skip"><span class="scn-clock" aria-hidden="true">🕐</span><h2 class="scn-title" id="scn-title" tabindex="-1">Weekend later…</h2></div>`;
+  }
+  const days = [["Fri", 2], ["Sat", 4], ["Sun", 3]];
+  const fx = state.fixes.fx_reorder20;
+  return `
+    ${ag("captain")}
+    <h2 class="scn-title" id="scn-title" tabindex="-1">How the weekend went</h2>
+    <div class="scn-kpis">
+      <div><span>Units sold</span><b>${val("scn_sold")} <small>of ${val("scn_atRisk")}</small></b>${chip("scn_sold")}</div>
+      <div><span>Revenue recovered</span><b>${fmt("money", val("scn_revenue"))}</b>${chip("scn_revenue")}</div>
+      <div><span>Waste avoided</span><b>${fmt("money", val("scn_waste"))}</b>${chip("scn_waste")}</div>
+      <div><span>New customers</span><b>${val("scn_newCust")}</b>${chip("scn_newCust")}</div>
+    </div>
+    <div class="scn-chart" aria-label="Bundles sold: Friday 2, Saturday 4, Sunday 3">
+      <p class="scn-chart-cap">Bundles sold</p>
+      ${days.map(([d, n]) => `<div class="bar"><i style="--h:${n / 4}"></i><span>${d}</span><em>${n}</em></div>`).join("")}
+      <p class="scn-reach">Reach ${val("scn_reach").toLocaleString()} · ${val("scn_clicks")} clicks ${chip("scn_reach")}</p>
+    </div>
+    <div class="fix-card ${fx || ""}">
+      <strong>Next time: lower salmon reorder qty by 20%</strong>
+      <span class="fix-meta">Pantry Stock · avoids most of the excess next month</span>
+      ${fx === "applied"
+        ? `<div class="fix-state"><span>✓ Applied · Store Captain is on it</span><button type="button" class="link-btn" data-scn-fix-undo>Undo</button></div>`
+        : `<div class="fix-actions"><button type="button" class="btn btn-sm btn-primary" data-scn-fix>Apply</button><button type="button" class="btn btn-sm btn-ghost" data-scn-fix-skip>Not now</button></div>`}
+    </div>`;
+}
+
+function scnHTML() {
+  const last = scn.beat === SCN_BEATS - 1;
+  const showNext = !(scn.beat === 2 && !scn.approved) && !(last && !scn.phase);
+  return `
+    <div class="scn-top">
+      <svg class="brand-mark" width="18" height="18" aria-hidden="true"><use href="#sparkle" /></svg>
+      <span class="scn-name">See it in action</span>
+      <div class="scn-dots" aria-label="Step ${scn.beat + 1} of ${SCN_BEATS}">${Array.from({ length: SCN_BEATS }, (_, i) => `<i class="${i < scn.beat ? "done" : i === scn.beat ? "on" : ""}"></i>`).join("")}</div>
+      <button type="button" class="scn-close" data-scn-close aria-label="Close">×</button>
+    </div>
+    <div class="scn-body"><div class="scn-beat" data-beat="${scn.beat + 1}">${scnBeatHTML()}</div></div>
+    <div class="scn-foot">
+      <span class="scn-sample">Sample · illustrative</span>
+      ${showNext ? `<button type="button" class="btn btn-primary scn-next" data-scn-next>${last ? "Done" : "Continue"}${scn.timer && !scn.paused ? `<span class="scn-timer" aria-hidden="true"></span>` : ""}</button>` : ""}
+    </div>`;
+}
+
+function scnClear() { clearTimeout(scn.timer); clearTimeout(scn.tick); scn.timer = null; scn.tick = null; }
+function scnPaint(focus = true) {
+  const body = scnEl.querySelector(".scn-body");
+  const st = body ? body.scrollTop : 0;
+  scnEl.innerHTML = scnHTML();
+  if (!focus) scnEl.querySelector(".scn-body").scrollTop = st;
+  else scnEl.querySelector("#scn-title")?.focus?.({ preventScroll: true });
+}
+/* Auto-advance (only for passive beats; never approves on your behalf; off with reduced motion). */
+function scnAuto(ms) {
+  if (REDUCED_MOTION() || scn.paused) return;
+  scn.timer = setTimeout(() => { scn.timer = null; scnGo(scn.beat + 1); }, ms);
+  scnEl.style.setProperty("--auto", `${ms}ms`);
+}
+function scnGo(beat) {
+  scnClear();
+  if (beat >= SCN_BEATS) { closeScenario(); return; }
+  scn.beat = beat; scn.phase = 0;
+  const reduced = REDUCED_MOTION();
+  if (beat === 0) {
+    if (reduced) { scn.phase = 1; scnAuto(0); } else scn.tick = setTimeout(() => { scn.phase = 1; scnPaint(false); scnAuto(6000); scnPaint(false); }, 2200);
+  } else if (beat === 1) { scn.tab = "ig"; scnAuto(9000); }
+  else if (beat === 2) { scn.approved = false; }
+  else if (beat === 3) {
+    if (reduced) scn.view = "after";
+    else { scn.view = "before"; scn.tick = setTimeout(() => { scn.view = "after"; scnPaint(false); scnAuto(6000); scnPaint(false); }, 1400); }
+  } else if (beat === 4) {
+    if (reduced) scn.phase = 1; else scn.tick = setTimeout(() => { scn.phase = 1; scnPaint(); }, 1300);
+  }
+  if (reduced) scnClear();
+  scnPaint();
+}
+function openScenario(origin) {
+  closePop();
+  scn.open = true; scn.paused = false; scn.origin = origin || null;
+  scnEl.hidden = false;
+  document.body.classList.add("scn-open");
+  scnGo(0);
+}
+function closeScenario() {
+  scnClear();
+  scn.open = false;
+  scnEl.hidden = true;
+  document.body.classList.remove("scn-open");
+  render({ keepScroll: true });
+  scn.origin?.isConnected && scn.origin.focus({ preventScroll: true });
+}
+scnEl.addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.closest("[data-dp]")) { scn.paused = true; scnClear(); return; } // open the source sheet; stop auto-advance
+  if (t.closest("[data-scn-close]")) { closeScenario(); return; }
+  if (t.closest("[data-scn-next]")) { scnGo(scn.beat + 1); return; }
+  const tab = t.closest("[data-scn-tab]");
+  if (tab) { scn.tab = tab.dataset.scnTab; scn.paused = true; scnClear(); scnPaint(false); return; }
+  const view = t.closest("[data-scn-view]");
+  if (view) { scn.view = view.dataset.scnView; scn.paused = true; scnClear(); scnPaint(false); return; }
+  if (t.closest("[data-scn-approve]")) {
+    scn.approved = true; scnPaint(false);
+    setTimeout(() => { if (scn.open && scn.beat === 2) scnGo(3); }, REDUCED_MOTION() ? 300 : 900);
+    return;
+  }
+  if (t.closest("[data-scn-edit]")) { toast("In the full product, you'd tweak copy and price here"); return; }
+  if (t.closest("[data-scn-fix]")) { state.fixes.fx_reorder20 = "applied"; scnPaint(false); toast("Added to your tasks"); return; }
+  if (t.closest("[data-scn-fix-skip]")) { state.fixes.fx_reorder20 = "dismissed"; scnPaint(false); return; }
+  if (t.closest("[data-scn-fix-undo]")) { delete state.fixes.fx_reorder20; scnPaint(false); return; }
+});
+window.addEventListener("keydown", (e) => { if (e.key === "Escape" && scn.open && popEl.hidden) closeScenario(); }, true); // capture: runs before the sheet's own Escape handler
+document.addEventListener("click", (e) => {
+  const o = e.target.closest("[data-scenario]");
+  if (o) { e.preventDefault(); openScenario(o); }
+});
+
+/* ---------- Always start on the welcome splash (fresh load, reload, short link, back-forward cache, Restart) ---------- */
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 history.replaceState({ step: 0, group: null }, "");
-/* ---------- Welcome splash ---------- */
-(() => {
+function showSplash() {
   const splash = document.getElementById("splash");
   if (!splash) return;
+  clearTimeout(showSplash._t);
   document.getElementById("splash-name").textContent = BUSINESS_CONFIG.ownerFirstName;
   document.getElementById("splash-biz").textContent = BUSINESS_CONFIG.name;
+  splash.hidden = false;
+  splash.classList.remove("gone");
   document.body.classList.add("splash-open");
-  const close = () => { splash.classList.add("gone"); document.body.classList.remove("splash-open"); setTimeout(() => { splash.hidden = true; }, 350); };
-  document.getElementById("splash-start").addEventListener("click", close);
-})();
+  window.scrollTo(0, 0);
+}
+document.getElementById("splash-start")?.addEventListener("click", () => {
+  const splash = document.getElementById("splash");
+  splash.classList.add("gone");
+  document.body.classList.remove("splash-open");
+  showSplash._t = setTimeout(() => { splash.hidden = true; }, 350);
+});
+window.addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  closePop();
+  launchOverlay.hidden = true;
+  if (scn.open) { scnClear(); scn.open = false; scnEl.hidden = true; document.body.classList.remove("scn-open"); }
+  freshState();
+  history.replaceState({ step: 0, group: null }, "");
+  state.step = 0;
+  render();
+  showSplash();
+});
+showSplash();
 render();
