@@ -273,6 +273,11 @@ function freshState() {
     overrides: {},
     editedAt: {},
     estimatesConfirmed: null,
+    estimateMode: "per-category",
+    categoryHours: {},
+    totalHours: null,
+    costPerHour: null,
+    savedEstimates: null,
   });
   Object.keys(CONNECTORS).forEach((id) => { state.tools[id] = DEFAULT_CONNECTED.includes(id); });
   AGENTS.forEach((a) => { state.voices[a.id] = defaultVoice(a.id); });
@@ -287,6 +292,115 @@ const countIn = (g) => g.subs.filter((s) => subSel(s.id)).length;
 const selectedGroups = () => PAIN_GROUPS.filter((g) => countIn(g) > 0);
 const agentById = (id) => AGENTS.find((a) => a.id === id);
 const inp = (k) => Number(state.inputs[k]);
+function merchantReportedHours() {
+  if (state.estimateMode === "total") return Number(state.totalHours) || 0;
+  return Object.values(state.categoryHours).reduce((sum, h) => sum + (Number(h) || 0), 0);
+}
+function merchantReportedCost() {
+  return merchantReportedHours() * (Number(state.costPerHour) || 0);
+}
+function fmtEstHoursNum(n) {
+  const v = Number(n) || 0;
+  return Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
+}
+function fmtEstHours(n) {
+  return `${fmtEstHoursNum(n)}h`;
+}
+function estFieldVal(v) {
+  return v == null || v === "" ? "" : v;
+}
+function snapshotEstimates() {
+  return {
+    estimateMode: state.estimateMode,
+    categoryHours: { ...state.categoryHours },
+    totalHours: state.totalHours,
+    costPerHour: state.costPerHour,
+  };
+}
+function restoreEstimates(snap) {
+  if (!snap) {
+    state.estimateMode = "per-category";
+    state.categoryHours = {};
+    state.totalHours = null;
+    state.costPerHour = null;
+    return;
+  }
+  state.estimateMode = snap.estimateMode;
+  state.categoryHours = { ...snap.categoryHours };
+  state.totalHours = snap.totalHours;
+  state.costPerHour = snap.costPerHour;
+}
+function readEstimateForm() {
+  if (state.estimateMode === "per-category") {
+    const next = {};
+    selectedGroups().forEach((g) => {
+      const el = document.getElementById(`cat-${g.id}`);
+      if (!el || el.value === "") return;
+      next[g.id] = Number(el.value);
+    });
+    state.categoryHours = next;
+  } else {
+    const el = document.getElementById("est-total-hours");
+    if (el) state.totalHours = el.value === "" ? null : Number(el.value);
+  }
+  const costEl = document.getElementById("est-cost-per-hour");
+  if (costEl) state.costPerHour = costEl.value === "" ? null : Number(costEl.value);
+}
+function estimateFormHTML() {
+  const cats = selectedGroups();
+  const perCat = state.estimateMode === "per-category";
+  return `
+      <div class="estimate-card editing" data-r="edit-estimates">
+        <div class="estimate-content">
+          <h3 class="estimate-title">Your time &amp; cost</h3>
+          <p class="estimate-sub">Only what you enter is used. Nothing is pre-filled from our numbers.</p>
+          <div class="estimate-mode-toggle" role="tablist" aria-label="How to enter hours">
+            <button type="button" class="mode-btn ${perCat ? "active" : ""}" data-mode="per-category" role="tab" aria-selected="${perCat}">By category</button>
+            <button type="button" class="mode-btn ${perCat ? "" : "active"}" data-mode="total" role="tab" aria-selected="${!perCat}">Just give one total</button>
+          </div>
+          <div class="estimate-inputs">
+            ${perCat ? `
+              <div class="category-hours-section">
+                <p class="section-label">Hours per week this costs you</p>
+                ${cats.map((g) => `
+                  <div class="category-field">
+                    <label for="cat-${g.id}">${g.icon} ${escapeHtml(g.short)}</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cat-${g.id}" class="cat-hours-input" data-cat="${g.id}" value="${estFieldVal(state.categoryHours[g.id])}" placeholder="—" min="0" step="0.5" inputmode="decimal" />
+                      <span class="unit-label">hrs/week</span>
+                    </div>
+                  </div>
+                `).join("")}
+                <div class="running-total">
+                  <strong>Total:</strong> <span id="hours-total">${fmtEstHoursNum(merchantReportedHours())}</span> hrs/week
+                </div>
+              </div>
+            ` : `
+              <div class="field">
+                <label for="est-total-hours">Total hours per week</label>
+                <div class="input-with-unit">
+                  <input type="number" id="est-total-hours" value="${estFieldVal(state.totalHours)}" placeholder="—" min="0" step="0.5" inputmode="decimal" />
+                  <span class="unit-label">hrs/week</span>
+                </div>
+                <p class="field-hint">Across ${cats.map((g) => escapeHtml(g.short.toLowerCase())).join(", ")}</p>
+              </div>
+            `}
+            <div class="field cost-field">
+              <label for="est-cost-per-hour">Your hourly cost</label>
+              <div class="input-with-unit">
+                <input type="number" id="est-cost-per-hour" value="${estFieldVal(state.costPerHour)}" placeholder="—" min="0" step="5" inputmode="decimal" />
+                <span class="unit-label">$/hr</span>
+              </div>
+              <p class="field-hint">What an hour of your time is worth to the shop</p>
+            </div>
+          </div>
+          <div class="estimate-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-save-estimates>Save</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cancel-edit-estimates>Cancel</button>
+          </div>
+        </div>
+      </div>`;
+}
 function escapeHtml(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -1402,68 +1516,29 @@ function renderDashboard() {
   const shownApprovals = ui("approvals") ? approvals : approvals.slice(0, 2);
   const shownFeed = ui("feed") ? feed : feed.slice(0, 3);
   const waiting = approvals.filter((a) => !state.approvalsResolved[a.id]).length;
-  const groups = selectedGroups().map((g) => g.short);
+  const editingEst = ui("edit-estimates");
+  const showHoursKpi = state.estimatesConfirmed === true && !editingEst;
+  const kpiCols = ui("kpis") ? (showHoursKpi ? "four" : "three") : (showHoursKpi ? "three" : "two");
   return `
     <div class="dash-header">
       <h1 class="screen-title">This week at ${escapeHtml(bizName())}</h1>
     </div>
     <div class="narrow wide">
-      ${state.estimatesConfirmed === null ? `
+      ${state.estimatesConfirmed === null && !editingEst ? `
       <div class="estimate-card">
         <div class="estimate-content">
           <div class="estimate-text">
-            <h3 class="estimate-title">Estimate your time savings?</h3>
-            <p class="estimate-sub">We can show roughly how much time your agent team saves you each week, based on your own estimates.</p>
+            <h3 class="estimate-title">How much time do these problems take?</h3>
+            <p class="estimate-sub">Optional. Enter your own hours and hourly cost if you want to see what this is costing you each week.</p>
           </div>
           <div class="estimate-actions">
             <button type="button" class="btn btn-sm btn-primary" data-confirm-estimates>Add estimates</button>
-            <button type="button" class="btn btn-sm btn-ghost" data-decline-estimates>Skip</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-decline-estimates>No thanks</button>
           </div>
         </div>
       </div>` : ""}
-      ${state.estimatesConfirmed === true && ui("edit-estimates") ? `
-      <div class="estimate-card editing">
-        <div class="estimate-content">
-          <h3 class="estimate-title">Your time & cost estimates</h3>
-          <div class="estimate-inputs">
-            <div class="field">
-              <label for="est-hours-lost">Hours lost per week</label>
-              <div class="input-with-unit">
-                <input type="number" id="est-hours-lost" value="${Math.round(val("hoursLost"))}" min="0" step="1" />
-                <span class="unit-label">hrs/week</span>
-              </div>
-              <p class="field-hint">Typical time spent on ${selectedGroups().map(g => g.short.toLowerCase()).join(", ")}</p>
-            </div>
-            <div class="field">
-              <label for="est-savings-rate">Share agents handle</label>
-              <div class="input-with-unit">
-                <input type="number" id="est-savings-rate" value="${inp("savingsRate")}" min="0" max="100" step="5" />
-                <span class="unit-label">%</span>
-              </div>
-            </div>
-            <div class="field">
-              <label for="est-dollars-stake">$ at stake per week</label>
-              <div class="input-with-unit">
-                <input type="number" id="est-dollars-stake" value="${Math.round(val("dollarsAtStake"))}" min="0" step="50" />
-                <span class="unit-label">$/week</span>
-              </div>
-              <p class="field-hint">Lost sales, spoilage, churn from these problems</p>
-            </div>
-            <div class="field">
-              <label for="est-protect-rate">Share agents protect</label>
-              <div class="input-with-unit">
-                <input type="number" id="est-protect-rate" value="${inp("protectRate")}" min="0" max="100" step="5" />
-                <span class="unit-label">%</span>
-              </div>
-            </div>
-          </div>
-          <div class="estimate-actions">
-            <button type="button" class="btn btn-sm btn-primary" data-save-estimates>Save</button>
-            <button type="button" class="btn btn-sm btn-ghost" data-cancel-edit-estimates>Cancel</button>
-          </div>
-        </div>
-      </div>` : ""}
-      <div class="kpi-row ${ui("kpis") ? "four" : (state.estimatesConfirmed === true ? "three" : "two")}">
+      ${editingEst ? estimateFormHTML() : ""}
+      <div class="kpi-row ${kpiCols}">
         <div class="kpi">
           <div class="label">Revenue ${chip("revenue")}</div>
           <div class="value" data-kpi="revenue">${fmt("money", rev)}</div>
@@ -1474,11 +1549,11 @@ function renderDashboard() {
           <div class="value" data-kpi="margin">${fmt("pct", val("margin"))}</div>
           <div class="delta ${mDelta < 0 ? "neg" : ""}">${arrow(mDelta)} ${Math.abs(mDelta).toFixed(1)} pts</div>
         </div>
-        ${state.estimatesConfirmed === true ? `
+        ${showHoursKpi ? `
         <div class="kpi">
-          <div class="label">Hours saved <button type="button" class="edit-est-btn" data-edit-estimates aria-label="Edit estimates">Edit</button></div>
-          <div class="value" data-kpi="hoursSaved">${fmt("hours", val("hoursSaved"))}</div>
-          <div class="delta">~${fmt("money", val("dollarsProtected"))} protected <span class="est-note">· your estimates</span></div>
+          <div class="label">Hours this costs you <button type="button" class="edit-est-btn" data-edit-estimates aria-label="Edit estimates">Edit</button></div>
+          <div class="value" data-kpi="merchantHours">${fmtEstHours(merchantReportedHours())}</div>
+          <div class="delta">~${fmt("money", merchantReportedCost())}/week <span class="est-note">· based on your estimates</span></div>
         </div>` : ""}
         ${ui("kpis") ? `
         <div class="kpi reveal" data-r="kpis">
@@ -1488,7 +1563,7 @@ function renderDashboard() {
         </div>` : ""}
       </div>
       <button type="button" class="more-link" data-ui="kpis" aria-expanded="${ui("kpis")}">${ui("kpis") ? "Fewer metrics" : "More metrics"}</button>
-      ${state.estimatesConfirmed === false ? `<button type="button" class="quiet-add-est" data-confirm-estimates>Add time estimates</button>` : ""}
+      ${state.estimatesConfirmed === false && !editingEst ? `<button type="button" class="quiet-add-est" data-confirm-estimates>Add time estimates</button>` : ""}
 
       <section class="calm-sec" aria-labelledby="ok-h">
         <div class="sec-head"><h2 class="sec-title" id="ok-h">Needs your OK</h2><span class="count" id="approval-count">${waiting} waiting</span></div>
@@ -1623,8 +1698,8 @@ function renderClosing() {
             <h4>Impact</h4>
             ${state.estimatesConfirmed === true ? `
             <ul>
-              <li>~${Math.round(val("hoursSaved"))} hrs/week back ${chip("hoursSaved")}</li>
-              <li>~${fmt("money", val("dollarsProtected"))}/week protected ${chip("dollarsProtected")}</li>
+              <li>${fmtEstHours(merchantReportedHours())}/week this costs you</li>
+              <li>~${fmt("money", merchantReportedCost())}/week · based on your estimates</li>
             </ul>` : `
             <ul>
               <li>Revenue: ${fmt("money", val("revenue"))}/week ${chip("revenue")}</li>
@@ -1797,43 +1872,61 @@ stage.addEventListener("click", (e) => {
 /* Estimate confirmation handlers */
 stage.addEventListener("click", (e) => {
   if (e.target.closest("[data-confirm-estimates]")) {
-    state.estimatesConfirmed = true;
+    if (state.savedEstimates) restoreEstimates(state.savedEstimates);
     state.ui["edit-estimates"] = true;
     render({ keepScroll: true, reveal: "edit-estimates" });
+    document.querySelector(".cat-hours-input, #est-total-hours")?.focus({ preventScroll: true });
     return;
   }
   if (e.target.closest("[data-decline-estimates]")) {
     state.estimatesConfirmed = false;
+    state.ui["edit-estimates"] = false;
     render({ keepScroll: true });
     return;
   }
   if (e.target.closest("[data-edit-estimates]")) {
     state.ui["edit-estimates"] = true;
     render({ keepScroll: true, reveal: "edit-estimates" });
+    document.querySelector(".cat-hours-input, #est-total-hours")?.focus({ preventScroll: true });
+    return;
+  }
+  if (e.target.closest("[data-mode]")) {
+    const mode = e.target.closest("[data-mode]").dataset.mode;
+    if (mode === state.estimateMode) return;
+    readEstimateForm();
+    if (mode === "total" && (state.totalHours == null || state.totalHours === "") && merchantReportedHours()) {
+      state.totalHours = merchantReportedHours();
+    }
+    state.estimateMode = mode;
+    render({ keepScroll: true, reveal: "edit-estimates" });
     return;
   }
   if (e.target.closest("[data-save-estimates]")) {
-    const hoursLost = Number(document.getElementById("est-hours-lost")?.value || 0);
-    const savingsRate = Number(document.getElementById("est-savings-rate")?.value || 0);
-    const dollarsAtStake = Number(document.getElementById("est-dollars-stake")?.value || 0);
-    const protectRate = Number(document.getElementById("est-protect-rate")?.value || 0);
-    
-    state.overrides.hoursLost = hoursLost;
-    state.inputs.savingsRate = savingsRate;
-    state.overrides.dollarsAtStake = dollarsAtStake;
-    state.inputs.protectRate = protectRate;
-    state.editedAt.hoursSaved = Date.now();
-    state.editedAt.dollarsProtected = Date.now();
-    
+    readEstimateForm();
+    state.savedEstimates = snapshotEstimates();
+    state.estimatesConfirmed = true;
     state.ui["edit-estimates"] = false;
     render({ keepScroll: true });
     toast("Estimates saved");
     return;
   }
   if (e.target.closest("[data-cancel-edit-estimates]")) {
+    restoreEstimates(state.savedEstimates);
     state.ui["edit-estimates"] = false;
     render({ keepScroll: true });
     return;
+  }
+});
+
+/* Update running total as category hours are entered */
+stage.addEventListener("input", (e) => {
+  if (e.target.classList.contains("cat-hours-input")) {
+    let total = 0;
+    document.querySelectorAll(".cat-hours-input").forEach((input) => {
+      total += Number(input.value) || 0;
+    });
+    const totalEl = document.getElementById("hours-total");
+    if (totalEl) totalEl.textContent = fmtEstHoursNum(total);
   }
 });
 

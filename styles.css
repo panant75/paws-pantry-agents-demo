@@ -1925,10 +1925,71 @@ body { letter-spacing: -0.005em; }
 .estimate-card.editing .estimate-actions {
   justify-content: flex-end;
 }
+.estimate-mode-toggle {
+  display: flex;
+  gap: 6px;
+}
+.mode-btn {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms ease-out;
+}
+.mode-btn:hover {
+  border-color: var(--line-strong);
+}
+.mode-btn.active {
+  background: rgba(43, 71, 185, 0.14);
+  border-color: rgba(102, 131, 242, 0.75);
+  color: #fff;
+}
 .estimate-inputs {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 14px;
+}
+.category-hours-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.section-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+.category-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.category-field label {
+  font-size: 13px;
+  color: #fff;
+  margin: 0;
+}
+.running-total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+}
+.running-total strong {
+  color: #fff;
+}
+.cost-field {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .input-with-unit {
   display: flex;
@@ -1938,6 +1999,14 @@ body { letter-spacing: -0.005em; }
 .input-with-unit input {
   flex: 1;
   min-width: 0;
+}
+.category-field .input-with-unit input {
+  width: 88px;
+  flex: none;
+}
+.estimate-inputs input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }
 .unit-label {
   font-size: 12px;
@@ -2014,7 +2083,13 @@ body { letter-spacing: -0.005em; }
   .agent-grid { grid-template-columns: minmax(0, 1fr); }
   .kpi-row, .kpi-row.two, .kpi-row.three, .kpi-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-row .kpi:nth-child(3):last-child { grid-column: 1 / -1; }
-  .estimate-inputs { grid-template-columns: 1fr; }
+  .category-field {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .category-field label {
+    font-size: 12px;
+  }
 }
 @media (max-width: 560px) {
   .stage { padding-top: 24px; }
