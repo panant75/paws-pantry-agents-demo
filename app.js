@@ -1105,15 +1105,7 @@ function renderWelcome() {
 
 function tallyListHTML() { return ""; }
 function tallyHTML() {
-  const n = state.selectedSubs.length;
-  return `
-      <div class="tally-card ${n ? "" : "empty"}" id="tally-card">
-        ${n ? `
-        <span class="tally-k">At stake each week</span>
-        <span class="tally-v"><b id="tally-hours">${Math.round(val("hoursLost"))}</b> hrs ${chip("hoursLost")}</span>
-        <span class="tally-v money"><b id="tally-dollars">${fmt("money", val("dollarsAtStake"))}</b> ${chip("dollarsAtStake")}</span>`
-        : `<span class="tally-k">At stake each week</span><span class="tally-v tally-empty">—</span>`}
-      </div>`;
+  return "";
 }
 
 function renderPains() {
