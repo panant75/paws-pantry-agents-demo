@@ -272,6 +272,7 @@ function freshState() {
     inputs: { ...DEFAULT_INPUTS },
     overrides: {},
     editedAt: {},
+    estimatesConfirmed: null,
   });
   Object.keys(CONNECTORS).forEach((id) => { state.tools[id] = DEFAULT_CONNECTED.includes(id); });
   AGENTS.forEach((a) => { state.voices[a.id] = defaultVoice(a.id); });
@@ -1407,7 +1408,62 @@ function renderDashboard() {
       <h1 class="screen-title">This week at ${escapeHtml(bizName())}</h1>
     </div>
     <div class="narrow wide">
-      <div class="kpi-row ${ui("kpis") ? "four" : ""}">
+      ${state.estimatesConfirmed === null ? `
+      <div class="estimate-card">
+        <div class="estimate-content">
+          <div class="estimate-text">
+            <h3 class="estimate-title">Estimate your time savings?</h3>
+            <p class="estimate-sub">We can show roughly how much time your agent team saves you each week, based on your own estimates.</p>
+          </div>
+          <div class="estimate-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-confirm-estimates>Add estimates</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-decline-estimates>Skip</button>
+          </div>
+        </div>
+      </div>` : ""}
+      ${state.estimatesConfirmed === true && ui("edit-estimates") ? `
+      <div class="estimate-card editing">
+        <div class="estimate-content">
+          <h3 class="estimate-title">Your time & cost estimates</h3>
+          <div class="estimate-inputs">
+            <div class="field">
+              <label for="est-hours-lost">Hours lost per week</label>
+              <div class="input-with-unit">
+                <input type="number" id="est-hours-lost" value="${Math.round(val("hoursLost"))}" min="0" step="1" />
+                <span class="unit-label">hrs/week</span>
+              </div>
+              <p class="field-hint">Typical time spent on ${selectedGroups().map(g => g.short.toLowerCase()).join(", ")}</p>
+            </div>
+            <div class="field">
+              <label for="est-savings-rate">Share agents handle</label>
+              <div class="input-with-unit">
+                <input type="number" id="est-savings-rate" value="${inp("savingsRate")}" min="0" max="100" step="5" />
+                <span class="unit-label">%</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="est-dollars-stake">$ at stake per week</label>
+              <div class="input-with-unit">
+                <input type="number" id="est-dollars-stake" value="${Math.round(val("dollarsAtStake"))}" min="0" step="50" />
+                <span class="unit-label">$/week</span>
+              </div>
+              <p class="field-hint">Lost sales, spoilage, churn from these problems</p>
+            </div>
+            <div class="field">
+              <label for="est-protect-rate">Share agents protect</label>
+              <div class="input-with-unit">
+                <input type="number" id="est-protect-rate" value="${inp("protectRate")}" min="0" max="100" step="5" />
+                <span class="unit-label">%</span>
+              </div>
+            </div>
+          </div>
+          <div class="estimate-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-save-estimates>Save</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cancel-edit-estimates>Cancel</button>
+          </div>
+        </div>
+      </div>` : ""}
+      <div class="kpi-row ${ui("kpis") ? "four" : (state.estimatesConfirmed === true ? "three" : "two")}">
         <div class="kpi">
           <div class="label">Revenue ${chip("revenue")}</div>
           <div class="value" data-kpi="revenue">${fmt("money", rev)}</div>
@@ -1418,11 +1474,12 @@ function renderDashboard() {
           <div class="value" data-kpi="margin">${fmt("pct", val("margin"))}</div>
           <div class="delta ${mDelta < 0 ? "neg" : ""}">${arrow(mDelta)} ${Math.abs(mDelta).toFixed(1)} pts</div>
         </div>
+        ${state.estimatesConfirmed === true ? `
         <div class="kpi">
-          <div class="label">Hours saved ${chip("hoursSaved")}</div>
+          <div class="label">Hours saved <button type="button" class="edit-est-btn" data-edit-estimates aria-label="Edit estimates">Edit</button></div>
           <div class="value" data-kpi="hoursSaved">${fmt("hours", val("hoursSaved"))}</div>
-          <div class="delta">~${fmt("money", val("dollarsProtected"))} protected ${chip("dollarsProtected")}</div>
-        </div>
+          <div class="delta">~${fmt("money", val("dollarsProtected"))} protected <span class="est-note">· your estimates</span></div>
+        </div>` : ""}
         ${ui("kpis") ? `
         <div class="kpi reveal" data-r="kpis">
           <div class="label">Reply time ${chip("replyTime")}</div>
@@ -1431,6 +1488,7 @@ function renderDashboard() {
         </div>` : ""}
       </div>
       <button type="button" class="more-link" data-ui="kpis" aria-expanded="${ui("kpis")}">${ui("kpis") ? "Fewer metrics" : "More metrics"}</button>
+      ${state.estimatesConfirmed === false ? `<button type="button" class="quiet-add-est" data-confirm-estimates>Add time estimates</button>` : ""}
 
       <section class="calm-sec" aria-labelledby="ok-h">
         <div class="sec-head"><h2 class="sec-title" id="ok-h">Needs your OK</h2><span class="count" id="approval-count">${waiting} waiting</span></div>
@@ -1563,10 +1621,15 @@ function renderClosing() {
           </div>
           <div class="summary-box">
             <h4>Impact</h4>
+            ${state.estimatesConfirmed === true ? `
             <ul>
               <li>~${Math.round(val("hoursSaved"))} hrs/week back ${chip("hoursSaved")}</li>
               <li>~${fmt("money", val("dollarsProtected"))}/week protected ${chip("dollarsProtected")}</li>
-            </ul>
+            </ul>` : `
+            <ul>
+              <li>Revenue: ${fmt("money", val("revenue"))}/week ${chip("revenue")}</li>
+              <li>Margin: ${fmt("pct", val("margin"))} ${chip("margin")}</li>
+            </ul>`}
           </div>
         </div>
       </div>` : ""}
@@ -1729,6 +1792,49 @@ stage.addEventListener("click", (e) => {
   render({ keepScroll: true, reveal: state.ui[k] ? k : null });
   const again = stage.querySelector(`[data-ui="${CSS.escape(k)}"]`);
   again?.focus({ preventScroll: true });
+});
+
+/* Estimate confirmation handlers */
+stage.addEventListener("click", (e) => {
+  if (e.target.closest("[data-confirm-estimates]")) {
+    state.estimatesConfirmed = true;
+    state.ui["edit-estimates"] = true;
+    render({ keepScroll: true, reveal: "edit-estimates" });
+    return;
+  }
+  if (e.target.closest("[data-decline-estimates]")) {
+    state.estimatesConfirmed = false;
+    render({ keepScroll: true });
+    return;
+  }
+  if (e.target.closest("[data-edit-estimates]")) {
+    state.ui["edit-estimates"] = true;
+    render({ keepScroll: true, reveal: "edit-estimates" });
+    return;
+  }
+  if (e.target.closest("[data-save-estimates]")) {
+    const hoursLost = Number(document.getElementById("est-hours-lost")?.value || 0);
+    const savingsRate = Number(document.getElementById("est-savings-rate")?.value || 0);
+    const dollarsAtStake = Number(document.getElementById("est-dollars-stake")?.value || 0);
+    const protectRate = Number(document.getElementById("est-protect-rate")?.value || 0);
+    
+    state.overrides.hoursLost = hoursLost;
+    state.inputs.savingsRate = savingsRate;
+    state.overrides.dollarsAtStake = dollarsAtStake;
+    state.inputs.protectRate = protectRate;
+    state.editedAt.hoursSaved = Date.now();
+    state.editedAt.dollarsProtected = Date.now();
+    
+    state.ui["edit-estimates"] = false;
+    render({ keepScroll: true });
+    toast("Estimates saved");
+    return;
+  }
+  if (e.target.closest("[data-cancel-edit-estimates]")) {
+    state.ui["edit-estimates"] = false;
+    render({ keepScroll: true });
+    return;
+  }
 });
 
 function updateTallyLive() {
