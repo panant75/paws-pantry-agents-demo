@@ -14,6 +14,18 @@ python3 -m http.server 8877
 
 No backend. Optional Google Fonts at runtime (falls back to system UI fonts offline).
 
+## Activity insight sheets (v6)
+Tapping ⓘ on an activity row or approval now opens a sheet that answers *what happened, why, and what to do about it* (all sample/illustrative, labeled once per sheet):
+- **What happened:** a short list you tap to expand, one item open at a time.
+  - Customer questions are grouped by theme; the counts always add up to the metric, even after you edit it. Expanding a theme shows 1–2 conversation snippets (Gmail/IG/SMS badge, name, time), with the reply written in Customer Pal's chosen voice.
+  - Subscriptions list named subscribers with the reason and what Order Desk did.
+  - Inventory lists SKUs with days to expiry or stock left, the cause, and the action taken.
+  - Renewals, routes, margin items and Instagram drafts work the same way.
+- **Why it keeps happening:** a one-line root cause that uses the live count.
+- **Suggested fix:** 1–3 prevention actions, each showing the owning agent(s) and an illustrative impact. *Apply* marks the fix applied ("Store Captain will set this up"), tags the activity/approval row "✓ Fix applied" and adds a task on Home. *Not now* skips it, and *Undo* reverts either one.
+- **How this is measured:** the original source, formula and Edit/Reset, collapsed into one row.
+- KPI tiles (revenue, margin, hours saved) add a short "What drove this" list.
+
 ## Calm pass (v5)
 Every screen carries one idea and one primary action. Secondary detail is one tap away.
 - **Step 1:** name input; business type/size collapsed into a one-line "Pet food shop · 1–5 people · Change".

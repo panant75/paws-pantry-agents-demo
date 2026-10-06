@@ -2049,3 +2049,44 @@ body { letter-spacing: -0.005em; }
 .suggest-pill { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font: 400 13px var(--font); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .suggest-pill:hover { border-color: var(--line-strong); color: #fff; }
 .suggest-pill:active { transform: scale(0.98); }
+
+/* ===== v6 · Activity insight sheets (what happened → why → fix) ===== */
+.popover.pop-insight:not(.sheet) { width: 420px; max-height: min(640px, calc(100vh - 24px)); }
+.popover.sheet.pop-insight { max-height: 88vh; max-height: 88dvh; }
+.ins-sec { margin-top: 18px; }
+.ins-h { font: 500 12px var(--font); letter-spacing: .02em; color: var(--muted); margin: 0 0 8px; text-transform: none; }
+.ins-list { list-style: none; margin: 0; padding: 0; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.ins-item + .ins-item { border-top: 1px solid var(--line); }
+.ins-item.open { background: rgba(43, 71, 185, 0.10); }
+.ins-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: none; border: 0; color: var(--ink); font: 400 14px var(--font); text-align: left; cursor: pointer; min-height: 44px; }
+.ins-title { flex: 1; min-width: 0; }
+.ins-meta { color: var(--ink-2); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ins-meta.ok { color: var(--green); }
+.ins-chev { color: var(--muted); font-size: 11px; width: 12px; text-align: center; }
+.ins-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+.ins-detail { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.ins-detail span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.convo { display: grid; gap: 6px; }
+.convo + .convo { padding-top: 10px; border-top: 1px dashed var(--line); }
+.convo-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.ch-ico { display: inline-grid; place-items: center; min-width: 30px; height: 18px; padding: 0 5px; border-radius: 6px; font: 600 10px var(--font); color: #fff; background: color-mix(in srgb, var(--c) 70%, #111); }
+.convo-msg { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); background: rgba(255,255,255,.05); border-radius: 12px 12px 12px 4px; padding: 8px 11px; max-width: 92%; justify-self: start; overflow-wrap: anywhere; }
+.convo-reply { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); border-left: 2px solid #6683F2; padding: 2px 0 2px 11px; overflow-wrap: anywhere; }
+.convo-who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.ins-drove { margin: 0; padding-left: 18px; color: var(--ink); font-size: 13px; line-height: 1.7; }
+.ins-why { margin: 16px 0 0; padding: 12px 14px; border-radius: 14px; background: rgba(102, 131, 242, 0.10); color: var(--ink); font-size: 14px; line-height: 1.45; }
+.ins-why span { display: block; font-size: 12px; color: #A9B8FF; margin-bottom: 3px; }
+.fix-card { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.03); transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.fix-card + .fix-card { margin-top: 8px; }
+.fix-card strong { font-weight: 500; font-size: 14px; color: var(--ink); line-height: 1.35; }
+.fix-meta { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.fix-actions { display: flex; gap: 8px; margin-top: 8px; }
+.fix-actions .btn { min-height: 36px; }
+.fix-card.applied { border-color: rgba(52, 168, 83, 0.55); background: rgba(52, 168, 83, 0.08); }
+.fix-card.dismissed { opacity: 0.7; }
+.fix-state { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--green); }
+.fix-state.muted { color: var(--muted); }
+.ins-measure { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding: 12px 2px; background: none; border: 0; border-top: 1px solid var(--line); color: var(--ink-2); font: 400 13px var(--font); cursor: pointer; }
+.ins-measure:hover { color: #fff; }
+.fix-tag { display: inline-block; margin-left: 8px; font-size: 11px; color: var(--green); white-space: nowrap; }
+.task.fix .task-btn { border-left-color: var(--green); }

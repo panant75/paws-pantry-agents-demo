@@ -226,6 +226,7 @@ function freshState() {
     painGroup: null,
     showMore: false,
     homeTasks: [],
+    fixes: {},
     ui: {},
     voiceEdit: null,
     voiceHint: null,
@@ -519,7 +520,196 @@ popEl.className = "popover";
 popEl.setAttribute("role", "dialog");
 popEl.hidden = true;
 document.body.append(popBackdrop, popEl);
-const pop = { id: null, mode: "view", anchor: null, error: "" };
+const pop = { id: null, mode: "view", anchor: null, error: "", openItem: null, measure: false };
+/* ---------- Activity insights: what happened → why → suggested fix (all SAMPLE / illustrative) ---------- */
+const CHANNELS = { gmail: { t: "Gmail", c: "#EA4335" }, ig: { t: "IG", c: "#C13584" }, sms: { t: "SMS", c: "#34A853" } };
+const FIXES = {
+  fx_eta: { title: "Auto-text delivery ETAs on Tuesday routes", agents: ["ship", "pal"], impact: "~5 fewer “where's my order?” questions a week" },
+  fx_faq: { title: "Add an allergy & ingredients FAQ and auto-reply with it", agents: ["pal"], impact: "~3 questions a week answered instantly" },
+  fx_skip: { title: "Offer “skip a box” before anyone can cancel", agents: ["orders"], impact: "Keeps ~1 in 3 would-be cancellations" },
+  fx_loyal: { title: "Auto-offer 10% loyalty pricing after 2 skips", agents: ["orders"], impact: "~$90/month in kept subscriptions" },
+  fx_bundle: { title: "Bundle near-expiry pouches into a weekend promo", agents: ["growth"], impact: "Clears ~20 units before they expire" },
+  fx_fifo: { title: "Lower pouch reorder qty + first-expiry-first-out reminder", agents: ["pantry"], impact: "~$60/week less spoilage" },
+  fx_dyn: { title: "Switch fast movers to demand-based reorder points", agents: ["pantry"], impact: "Fewer stock-outs on items like dental chews" },
+  fx_pace: { title: "Alert you when an item sells 2× its usual pace", agents: ["pantry", "captain"], impact: "Heads-up ~3 days earlier" },
+  fx_card: { title: "Send card-expiry reminders 7 days before renewal", agents: ["orders"], impact: "Avoids ~1 failed renewal a week" },
+  fx_slot: { title: "Nudge same-block customers to the shared Tuesday slot", agents: ["ship"], impact: "~1 hour saved per route" },
+  fx_price: { title: "Raise raw bites by $1.50 to restore margin", agents: ["cash"], impact: "Back to ~30% margin on that line" },
+  fx_min: { title: "Set a $25 minimum for free delivery", agents: ["cash", "ship"], impact: "Recovers ~$40/week in fees" },
+  fx_evergreen: { title: "Auto-approve evergreen posts; review only promos", agents: ["growth"], impact: "Posts go out ~2 days sooner" },
+};
+/* Split a total across weights (largest remainder) so theme counts always add up to the metric. */
+function splitCount(total, weights) {
+  const sum = weights.reduce((a, b) => a + b, 0) || 1;
+  const raw = weights.map((w) => (total * w) / sum);
+  const out = raw.map(Math.floor);
+  let left = total - out.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { out[i]++; left--; } });
+  return out;
+}
+const INSIGHTS = {
+  act_faq: {
+    agent: "pal", head: "By theme",
+    items: [
+      { id: "eta", title: "Where's my order?", w: 5, snippets: [
+        { ch: "sms", time: "Tue · 10:12a", name: "Maya", msg: "Hi, my Tuesday box still isn't here. Any update?", core: "Your box is on today's Tuesday route and should arrive by 4pm. I'll text you when the driver is 10 minutes away!" },
+        { ch: "ig", time: "Tue · 1:40p", name: "Sam", msg: "Is my delivery still coming today?", core: "Yes! It's out with our driver now and due before 5pm." } ] },
+      { id: "allergy", title: "Ingredient / allergy", w: 3, snippets: [
+        { ch: "gmail", time: "Mon · 9:14a", name: "Priya", msg: "Does the salmon kibble have chicken in it? My dog is allergic.", core: "Great question! Our grain-free salmon kibble is chicken-free. The full ingredient list is on the bag and on our site." } ] },
+      { id: "day", title: "Change delivery day", w: 2, snippets: [
+        { ch: "sms", time: "Wed · 8:05a", name: "Jordan", msg: "Can I move my box to Thursdays?", core: "Done! Your box now arrives on Thursdays, starting next week." } ] },
+      { id: "billing", title: "Billing", w: 2, snippets: [
+        { ch: "gmail", time: "Thu · 3:22p", name: "Lee", msg: "I think I was charged twice this month.", core: "Sorry about that! I've refunded the duplicate charge. It should show in 3–5 days." } ] },
+    ],
+    counts: () => splitCount(val("act_faq"), INSIGHTS.act_faq.items.map((i) => i.w)),
+    why: () => { const c = INSIGHTS.act_faq.counts(); return `${c[0]} of ${val("act_faq")} questions were about late deliveries on Tuesday routes.`; },
+    fixes: ["fx_eta", "fx_faq"],
+  },
+  act_atRisk: {
+    agent: "orders", head: "Subscribers",
+    items: [
+      { id: "maya", title: "Maya R.", meta: "At risk", reason: "Skipped her box twice in a row.", did: "Drafted a check-in note and offered every-3-weeks delivery." },
+      { id: "jordan", title: "Jordan P.", meta: "At risk", reason: "Opened the “pause subscription” email 3 times.", did: "Prepared a skip-a-box option instead of cancelling." },
+      { id: "chen", title: "Chen L.", meta: "Saved", ok: true, reason: "Complained the box went up $4.", did: "Offered 10% loyalty pricing. Chen stayed on." },
+    ],
+    why: () => "At-risk subscribers skipped or paused right after the monthly price change.",
+    fixes: ["fx_skip", "fx_loyal"],
+  },
+  act_expiry: {
+    agent: "pantry", head: "Items",
+    items: [
+      { id: "salmon", title: "Grain-free salmon pouches", meta: "3 days · 14 units", reason: "Ordered a case of 48 against ~10 sold a week.", did: "Flagged for a promo and held the next case." },
+      { id: "turkey", title: "Turkey & pumpkin pouches", meta: "6 days · 9 units", reason: "Newer stock was shelved in front of older stock.", did: "Added a shelf-rotation reminder for Monday." },
+      { id: "stew", title: "Puppy chicken stew", meta: "9 days · 6 units", reason: "Sales slowed after a competitor's promo.", did: "Suggested pairing it with puppy kibble." },
+      { id: "lamb", title: "Lamb & rice pouches", meta: "12 days · 5 units", reason: "Seasonal dip in demand.", did: "Watching. No action yet." },
+    ],
+    why: () => "Pouches are reordered by the case, faster than they sell, and newer stock goes in front.",
+    fixes: ["fx_bundle", "fx_fifo"],
+  },
+  act_reorder: {
+    agent: "pantry", head: "Items",
+    items: [
+      { id: "dental", title: "Dental chews", meta: "4 left · ~2 days", reason: "Selling 3× usual since a local vet recommended them.", did: "Drafted a rush reorder of 40." },
+      { id: "kibble", title: "Grain-free kibble 12 lb", meta: "5 bags · reorder at 8", reason: "Supplier delivery slipped a week.", did: "Drafted a reorder of 20 bags." },
+      { id: "treats", title: "Salmon treats", meta: "6 bags", reason: "Weekend rush.", did: "Added to the same supplier order." },
+    ],
+    why: () => "Reorder points are fixed, so demand spikes (like the vet tip on dental chews) run you low.",
+    fixes: ["fx_dyn", "fx_pace"],
+  },
+  act_renewals: {
+    agent: "orders", head: "Renewals",
+    items: [
+      { id: "weekly", title: "Weekly boxes", meta: "11 renewed", reason: "Cards charged without issues.", did: "Confirmed and sent receipts." },
+      { id: "monthly", title: "Monthly boxes", meta: "6 renewed", reason: "Cards charged without issues.", did: "Confirmed and sent receipts." },
+      { id: "card", title: "Expired card · Riley K.", meta: "Fixed", ok: true, reason: "Card expired the day before renewal.", did: "Sent an update link; Riley updated it the same day." },
+    ],
+    why: () => "One renewal nearly failed on an expired card. Those show up a week ahead.",
+    fixes: ["fx_card"],
+  },
+  act_deliveries: {
+    agent: "ship", head: "Routes",
+    items: [
+      { id: "elm", title: `${BUSINESS_CONFIG.street} & Oak Ave`, meta: "3 stops → 1 run", reason: "Three orders within two blocks on Tuesday.", did: "Combined into one 25-minute run." },
+      { id: "maple", title: "Maple Ct", meta: "2 stops → 1 run", reason: "Neighbors ordered an hour apart.", did: "Held the first order 40 minutes to pair them." },
+      { id: "river", title: "Riverside", meta: "2 stops → 1 run", reason: "Same building, different days.", did: "Moved one to the shared slot with the customer's OK." },
+    ],
+    why: () => "Most same-block orders land on Tuesdays, which is also when most late deliveries happen.",
+    fixes: ["fx_slot", "fx_eta"],
+  },
+  act_lowMargin: {
+    agent: "cash", head: "Items",
+    items: [
+      { id: "raw", title: "Premium raw bites", meta: "22% margin", reason: "Supplier raised the cost 12%; shelf price unchanged.", did: "Flagged with a suggested new price." },
+      { id: "deliv", title: "Free delivery on small orders", meta: "−6% after fees", reason: "Orders under $25 still ship free.", did: "Modeled a $25 minimum." },
+    ],
+    why: () => "Supplier costs went up but shelf prices and delivery rules didn't change.",
+    fixes: ["fx_price", "fx_min"],
+  },
+  act_igDrafts: {
+    agent: "growth", head: "Drafts",
+    items: [
+      { id: "promo", title: "Fill-a-bowl Friday", meta: "Promo post", reason: "Weekend traffic is highest Fri–Sat.", did: "Drafted caption + photo crop." },
+      { id: "dog", title: "Meet the shop dog", meta: "Story", reason: "Your most-liked post type.", did: "Drafted 3 frames." },
+      { id: "treats", title: "New salmon treats", meta: "Product post", reason: "New arrival this week.", did: "Drafted with price and link." },
+    ],
+    why: () => "Drafts wait about 2 days for review, so timely posts go out late.",
+    fixes: ["fx_evergreen"],
+  },
+  revenue: { drove: ["Subscription boxes · +$310 vs last week", "Weekend walk-ins · +$140", "Treats · −$60 (dental chews ran low)"] },
+  margin: { drove: ["Treats are your best margin (48%)", "Raw bites slipped to 22% after a cost increase", "Delivery fees took ~6% of revenue"], fixes: ["fx_price", "fx_min"] },
+  hoursSaved: { drove: ["Customer replies · ~6h", "Reorders & stock checks · ~4h", "Route planning · ~3h", "Bookkeeping & briefings · the rest"] },
+};
+function replyInVoice(agentId, name, core) {
+  const v = state.voices[agentId];
+  const ps = vPresets(v);
+  let body = core;
+  if (ps.includes("concise")) body = body.split(/(?<=[.!?])\s+/)[0];
+  ps.forEach((id) => { const m = VOICE_MODS[id]; if (m) body += ` ${fillVars(m.customer)}`; });
+  if (ps.includes("pro") || v.formality >= 4) body = body.replace(/!/g, ".");
+  if (v.emoji) body += " 🐾";
+  return `${greeting(v.preset, v.formality, name)} ${body}`;
+}
+const fixStatus = (fid) => (state.fixes || {})[fid];
+const dpHasAppliedFix = (dp) => !!(INSIGHTS[dp] && (INSIGHTS[dp].fixes || []).some((f) => fixStatus(f) === "applied"));
+const fixTag = (dp) => (dpHasAppliedFix(dp) ? `<span class="fix-tag">✓ Fix applied</span>` : "");
+
+function insightHTML(id) {
+  const ins = INSIGHTS[id];
+  const parts = [];
+  if (ins.items) {
+    const counts = ins.counts ? ins.counts() : null;
+    const agent = agentById(ins.agent);
+    parts.push(`<section class="ins-sec"><h3 class="ins-h">What happened</h3><ul class="ins-list">
+      ${ins.items.map((it, i) => {
+        const open = pop.openItem === it.id;
+        const meta = counts ? String(counts[i]) : it.meta;
+        let detail = "";
+        if (open && it.snippets) {
+          detail = it.snippets.map((s) => `
+            <div class="convo">
+              <div class="convo-meta"><span class="ch-ico" style="--c:${CHANNELS[s.ch].c}">${CHANNELS[s.ch].t}</span>${escapeHtml(s.name)} · ${escapeHtml(s.time)}</div>
+              <p class="convo-msg">${escapeHtml(s.msg)}</p>
+              <p class="convo-reply"><span class="convo-who">${agent.icon} ${escapeHtml(agent.name)} · ${escapeHtml(voiceLabel(state.voices[ins.agent]))}</span>${escapeHtml(replyInVoice(ins.agent, s.name, s.core))}</p>
+            </div>`).join("");
+        } else if (open) {
+          detail = `<p class="ins-detail"><span>Why</span>${escapeHtml(it.reason)}</p><p class="ins-detail"><span>What ${escapeHtml(agent.name)} did</span>${escapeHtml(it.did)}</p>`;
+        }
+        return `<li class="ins-item ${open ? "open" : ""}">
+          <button type="button" class="ins-row" data-ins-item="${it.id}" aria-expanded="${open}">
+            <span class="ins-title">${escapeHtml(it.title)}</span>
+            <span class="ins-meta ${it.ok ? "ok" : ""}">${escapeHtml(meta)}</span>
+            <span class="ins-chev" aria-hidden="true">${open ? "▴" : "▾"}</span>
+          </button>
+          ${open ? `<div class="ins-body reveal">${detail}</div>` : ""}
+        </li>`;
+      }).join("")}
+    </ul></section>`);
+  }
+  if (ins.drove) {
+    parts.push(`<section class="ins-sec"><h3 class="ins-h">What drove this</h3><ul class="ins-drove">${ins.drove.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul></section>`);
+  }
+  if (ins.why) parts.push(`<p class="ins-why"><span>Why it keeps happening</span>${escapeHtml(ins.why())}</p>`);
+  if (ins.fixes && ins.fixes.length) {
+    parts.push(`<section class="ins-sec"><h3 class="ins-h">Suggested fix</h3>
+      ${ins.fixes.map((fid) => {
+        const f = FIXES[fid];
+        const st = fixStatus(fid);
+        const owners = f.agents.map((a) => agentById(a).name).join(" + ");
+        return `<div class="fix-card ${st || ""}" data-fix-card="${fid}">
+          <strong>${escapeHtml(f.title)}</strong>
+          <span class="fix-meta">${escapeHtml(owners)} · ${escapeHtml(f.impact)}</span>
+          ${st === "applied"
+            ? `<div class="fix-state"><span>✓ Applied · Store Captain will set this up. Nothing needed from you.</span><button type="button" class="link-btn" data-fix-undo="${fid}">Undo</button></div>`
+            : st === "dismissed"
+              ? `<div class="fix-state muted"><span>Skipped for now</span><button type="button" class="link-btn" data-fix-undo="${fid}">Undo</button></div>`
+              : `<div class="fix-actions"><button type="button" class="btn btn-sm btn-primary" data-fix-apply="${fid}">Apply</button><button type="button" class="btn btn-sm btn-ghost" data-fix-skip="${fid}">Not now</button></div>`}
+        </div>`;
+      }).join("")}
+    </section>`);
+  }
+  return parts.join("");
+}
+
 
 function popHTML(id) {
   const d = DP[id];
@@ -562,6 +752,7 @@ function popHTML(id) {
       </form>`;
   }
 
+  const ins = INSIGHTS[id];
   const rows = [];
   rows.push(`<div class="pop-row"><dt>Source</dt><dd>${escapeHtml(d.source)}</dd></div>`);
   rows.push(`<div class="pop-row"><dt>How it's calculated</dt><dd>${escapeHtml(d.formula)}</dd></div>`);
@@ -590,6 +781,11 @@ function popHTML(id) {
     ? `<button type="button" class="btn btn-sm btn-soft" data-pop-jump="${d.jump}">Change in Step ${d.jump + 1}</button>`
     : `<button type="button" class="btn btn-sm btn-soft" data-pop-edit>Edit</button>${edited ? `<button type="button" class="btn btn-sm btn-ghost" data-pop-reset>Reset to sample</button>` : ""}`;
 
+  if (ins) {
+    return `${head}${insightHTML(id)}
+      <button type="button" class="ins-measure" data-pop-measure aria-expanded="${pop.measure}"><span>How this is measured</span><span aria-hidden="true">${pop.measure ? "▴" : "›"}</span></button>
+      ${pop.measure ? `<div class="reveal"><dl class="pop-rows">${rows.join("")}</dl><div class="pop-actions">${actions}</div></div>` : ""}`;
+  }
   return `${head}<dl class="pop-rows">${rows.join("")}</dl><div class="pop-actions">${actions}</div>`;
 }
 
@@ -614,6 +810,7 @@ function positionPop() {
   const left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), window.innerWidth - w - 12);
   let top = r.bottom + 10;
   if (top + h > window.innerHeight - 12) top = Math.max(12, r.top - h - 10);
+  top = Math.max(12, Math.min(top, window.innerHeight - h - 12));
   popEl.style.left = `${left}px`;
   popEl.style.top = `${top}px`;
 }
@@ -621,6 +818,7 @@ function openPop(id, anchor, mode = "view") {
   document.querySelectorAll(".src-chip[aria-expanded='true']").forEach((c) => c.setAttribute("aria-expanded", "false"));
   pop.id = id; pop.anchor = anchor; pop.mode = mode; pop.error = "";
   popEl.innerHTML = popHTML(id);
+  popEl.classList.toggle("pop-insight", !!INSIGHTS[id]);
   popEl.hidden = false;
   popEl.setAttribute("aria-label", `${DP[id].label}: source`);
   if (anchor) anchor.setAttribute("aria-expanded", "true");
@@ -628,7 +826,9 @@ function openPop(id, anchor, mode = "view") {
 }
 function refreshPop() {
   if (popEl.hidden) return;
+  const st = popEl.scrollTop;
   popEl.innerHTML = popHTML(pop.id);
+  popEl.scrollTop = st;
   positionPop();
 }
 function closePop() {
@@ -644,6 +844,24 @@ function reopenAfterRender(id) {
 
 popEl.addEventListener("click", (e) => {
   if (e.target.closest("[data-pop-close]")) { closePop(); return; }
+  const insItem = e.target.closest("[data-ins-item]");
+  if (insItem) { pop.openItem = pop.openItem === insItem.dataset.insItem ? null : insItem.dataset.insItem; refreshPop(); popEl.querySelector(`[data-ins-item="${insItem.dataset.insItem}"]`)?.focus({ preventScroll: true }); return; }
+  if (e.target.closest("[data-pop-measure]")) { pop.measure = !pop.measure; refreshPop(); popEl.querySelector("[data-pop-measure]")?.focus({ preventScroll: true }); return; }
+  const fx = e.target.closest("[data-fix-apply], [data-fix-skip], [data-fix-undo]");
+  if (fx) {
+    const fid = fx.dataset.fixApply || fx.dataset.fixSkip || fx.dataset.fixUndo;
+    if (fx.dataset.fixApply) state.fixes[fid] = "applied";
+    else if (fx.dataset.fixSkip) state.fixes[fid] = "dismissed";
+    else delete state.fixes[fid];
+    const id = pop.id, st = popEl.scrollTop, keep = { openItem: pop.openItem, measure: pop.measure };
+    render({ keepScroll: true });
+    Object.assign(pop, keep);
+    openPop(id, document.querySelector(`[data-dp="${id}"]`), "view");
+    popEl.scrollTop = st;
+    popEl.querySelector(`[data-fix-card="${fid}"] button`)?.focus({ preventScroll: true });
+    if (fx.dataset.fixApply) toast("Store Captain will set this up · added to your tasks");
+    return;
+  }
   if (e.target.closest("[data-pop-edit]")) { pop.mode = "edit"; pop.error = ""; refreshPop(); popEl.querySelector("input")?.focus({ preventScroll: true }); return; }
   if (e.target.closest("[data-pop-cancel]")) { pop.mode = "view"; pop.error = ""; refreshPop(); return; }
   if (e.target.closest("[data-pop-reset]")) {
@@ -691,7 +909,7 @@ document.addEventListener("click", (e) => {
   if (c) {
     e.preventDefault();
     if (!popEl.hidden && pop.anchor === c) closePop();
-    else openPop(c.dataset.dp, c);
+    else { pop.openItem = null; pop.measure = false; openPop(c.dataset.dp, c); }
     return;
   }
   if (!popEl.hidden && !e.composedPath().includes(popEl)) closePop();
@@ -1220,7 +1438,7 @@ function renderDashboard() {
                   <div class="mini-avatar" aria-hidden="true">${agent.icon}</div>
                   <div class="approval-body">
                     <strong>${escapeHtml(item.title)}${item.dp ? chip(item.dp) : ""}</strong>
-                    <span class="approval-meta">${escapeHtml(agent.name)}${g ? ` · <span class="for-tag">${escapeHtml(g.short)}</span>` : ""}</span>
+                    <span class="approval-meta">${escapeHtml(agent.name)}${g ? ` · <span class="for-tag">${escapeHtml(g.short)}</span>` : ""}${item.dp ? fixTag(item.dp) : ""}</span>
                     <p>${escapeHtml(item.body)}</p>
                     <button type="button" class="link-btn" data-ui="draft-${item.id}" aria-expanded="${dOpen}">${dOpen ? "Hide draft" : "View draft"}</button>
                     ${dOpen ? `
@@ -1249,7 +1467,7 @@ function renderDashboard() {
             return `
               <div class="feed-item">
                 <div class="mini-avatar" aria-hidden="true">${agent.icon}</div>
-                <div class="feed-body"><p>${escapeHtml(f.text)}${f.dp ? chip(f.dp) : ""}</p><span class="feed-sub">${escapeHtml(agent.name)}</span></div>
+                <div class="feed-body"><p>${escapeHtml(f.text)}${f.dp ? chip(f.dp) : ""}</p><span class="feed-sub">${escapeHtml(agent.name)}${f.dp ? fixTag(f.dp) : ""}</span></div>
                 <div class="feed-time">${f.time}</div>
               </div>`;
           }).join("")}
@@ -1270,7 +1488,8 @@ function homeTasks() {
   const verb = { "Replied to": "Replying to", Flagged: "Watching", Confirmed: "Confirming", Grouped: "Grouping", Queued: "Drafting", Compiled: "Compiling" };
   sampleFeed().slice(0, 3).forEach((f) => working.push({ agentId: f.agentId, title: f.text.replace(/^(Replied to|Flagged|Confirmed|Grouped|Queued|Compiled)/, (m) => verb[m]), status: "Working on it", wait: false }));
   const mine = (state.homeTasks || []).slice().reverse().map((t) => ({ agentId: "captain", title: t, status: "Working on it", wait: false }));
-  return [...mine, ...waiting.slice(0, 2), ...working.slice(0, 2), ...waiting.slice(2), ...working.slice(2), ...done];
+  const fixes = Object.keys(state.fixes || {}).filter((fid) => state.fixes[fid] === "applied").reverse().map((fid) => ({ agentId: FIXES[fid].agents[0], title: FIXES[fid].title, status: "Fix applied · setting up", wait: false, fix: true }));
+  return [...mine, ...fixes, ...waiting.slice(0, 2), ...working.slice(0, 2), ...waiting.slice(2), ...working.slice(2), ...done];
 }
 function homeHTML() {
   const tasks = homeTasks();
@@ -1295,7 +1514,7 @@ function homeHTML() {
         <ul class="task-list" id="task-list">
           ${shown.map((t) => {
             const a = agentById(t.agentId);
-            return `<li class="task ${t.wait ? "waiting" : ""}">
+            return `<li class="task ${t.wait ? "waiting" : ""} ${t.fix ? "fix" : ""}">
               <button type="button" class="task-btn" ${t.wait ? `data-goto-dash` : ""}>
                 <span class="task-title">${escapeHtml(t.title)}</span>
                 <span class="task-status">${escapeHtml(t.status)} · ${escapeHtml(a.name)}</span>
