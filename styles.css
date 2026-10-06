@@ -489,64 +489,6 @@ ul { margin: 0; padding: 0; list-style: none; }
   text-align: right;
 }
 
-.tally-card {
-  position: sticky;
-  top: calc(var(--topbar-h) + 16px);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: var(--shadow-md);
-}
-.tally-card h3 {
-  font-size: 14px;
-  font-weight: 800;
-  margin-bottom: 4px;
-}
-.tally-note {
-  font-size: 11px;
-  color: var(--muted);
-  margin-bottom: 14px;
-  line-height: 1.4;
-}
-.tally-metric {
-  background: var(--surface-2);
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 10px;
-}
-.tally-metric .label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-.tally-metric .value {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-.tally-metric.money .value { color: var(--coral); }
-.tally-metric .unit {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.tally-selected {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--ink-2);
-}
-.tally-selected li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--line);
-}
-.tally-selected li:last-child { border-bottom: none; }
-
 /* ---------- Agent cards ---------- */
 .agent-grid {
   display: grid;
@@ -1175,7 +1117,6 @@ ul { margin: 0; padding: 0; list-style: none; }
   .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .agent-grid { grid-template-columns: 1fr; }
   .tone-options, .approval-options { grid-template-columns: 1fr; }
-  .tally-card { position: static; }
   .progress-line { width: 16px; }
   .demo-badge { display: none; }
   .topbar-inner { grid-template-columns: auto 1fr; }
@@ -1313,7 +1254,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   font: 800 10px/1.2 var(--font); letter-spacing: .01em; color: #A8C7FF;
   background: var(--blue-soft); border: 1px solid rgba(138, 180, 248, 0.45); border-radius: 999px; padding: 2px 7px; white-space: nowrap;
 }
-.tally-metric .label, .kpi .label { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; }
+.kpi .label { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; }
 .impact-tile .n { display: inline-flex; align-items: center; justify-content: center; gap: 2px; flex-wrap: wrap; }
 .impact-tile .n .src-chip { margin-left: 4px; }
 
@@ -1432,7 +1373,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 .conn-agents { margin-top: 10px; font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
 .back-menu-bottom { width: 100%; justify-content: center; }
 
-.tally-metrics { display: grid; gap: 0; }
 .conn-group { margin-top: 14px; }
 .conn-group:first-child { margin-top: 0; }
 .conn-group-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; margin-bottom: 8px; color: var(--ink); }
@@ -1442,13 +1382,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 .feed-body .for-tag { margin-right: 4px; }
 
 @media (max-width: 860px) {
-  .pain-layout .tally-card { order: -1; padding: 12px 14px; border-radius: 14px; }
-  .pain-layout .tally-card h3 { font-size: 13px; }
-  .pain-layout .tally-note { margin-bottom: 8px; }
-  .pain-layout .tally-metrics { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .pain-layout .tally-metric { margin-bottom: 0; padding: 10px; }
-  .pain-layout .tally-metric .value { font-size: 22px; }
-  .pain-layout .tally-selected { display: none; }
 }
 @media (max-width: 560px) {
   .group-card { padding: 12px; gap: 10px; }
@@ -1461,8 +1394,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 @media (max-width: 360px) {
   .group-icon { width: 36px; height: 36px; font-size: 16px; }
   .group-chev { display: none; }
-  .pain-layout .tally-metric .value { font-size: 19px; }
-  .pain-layout .tally-metric .label { font-size: 11px; }
 }
 /* Compact connector rows on phones: logo | name+desc+status | button */
 @media (max-width: 560px) {
@@ -1516,12 +1447,6 @@ ul { margin: 0; padding: 0; list-style: none; }
   .screen[data-step="1"] .screen-title { font-size: 22px; }
   .screen[data-step="1"] .screen-sub { font-size: 13.5px; margin-bottom: 12px; }
   .pain-layout { gap: 12px; }
-  .pain-layout .tally-card { padding: 10px 12px; }
-  .pain-layout .tally-card h3 { display: none; }
-  .pain-layout .tally-note { font-size: 10.5px; margin-bottom: 6px; }
-  .pain-layout .tally-metric { padding: 8px 10px; }
-  .pain-layout .tally-metric .value { font-size: 19px; line-height: 1.15; }
-  .pain-layout .tally-metric .unit { display: none; }
   .group-list { gap: 8px; }
   .group-card { padding: 10px 12px; }
   .group-icon { width: 36px; height: 36px; font-size: 16px; }
@@ -1625,7 +1550,7 @@ h3, h4, strong { font-weight: 500; }
 #btn-next { order: 2; min-width: 140px; }
 .toast { background: #2a2b31; color: #fff; border: 1px solid var(--line); }
 /* Cards: dark, rounded, quiet */
-.group-card, .sub-item, .agent-card, .tool-row, .setup-section, .panel, .kpi, .tally-card, .close-card, .welcome-card,
+.group-card, .sub-item, .agent-card, .tool-row, .setup-section, .panel, .kpi, .close-card, .welcome-card,
 .option-card, .summary-box, .impact-tile, .connectors-box, .vs-row, .approval-item, .voice-panel, .popover {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: none;
 }
@@ -1653,10 +1578,6 @@ h3, h4, strong { font-weight: 500; }
 input[type="range"] { accent-color: #6683F2; }
 .severity label { color: var(--muted); font-weight: 500; }
 .severity-val { color: var(--teal-dark); }
-.tally-card h3 { font-weight: 500; color: #fff; }
-.tally-metric { background: var(--surface-2); }
-.tally-metric .value { font-weight: 400; color: #fff; }
-.tally-metric.money .value { color: var(--coral); }
 .field label, .vp-label { color: var(--muted); font-weight: 500; }
 input[type="text"], input[type="number"], textarea, select { background: var(--surface-2); color: var(--ink); border-color: var(--line-strong); }
 .agent-card h3, .setup-section h3, .panel h3, .connectors-box h3 { color: #fff; font-weight: 500; }
@@ -1891,18 +1812,7 @@ body { letter-spacing: -0.005em; }
 .focus-fields { margin-top: var(--space-4); }
 .big-input { margin-bottom: var(--space-4); }
 
-/* Step 2: slim tally + clean cards */
-.tally-card {
-  position: static; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 18px;
-  min-height: 46px; padding: 10px 16px; margin: 0 0 var(--space-3); border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); box-shadow: none;
-}
-.tally-card.empty { background: none; border-color: transparent; }
-.tally-k { font-size: 13px; color: var(--muted); }
-.tally-v { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.tally-v b { font: 500 16px var(--font); color: #fff; }
-.tally-v.money b { color: var(--coral); }
-.tally-card .edited-badge { margin-left: 0; }
+/* Step 2: clean cards */
 .group-list { gap: 10px; }
 .group-card { min-height: 66px; padding: 14px 18px; gap: 14px; }
 .group-icon { width: 36px; height: 36px; font-size: 16px; border-radius: 10px; }
@@ -1972,11 +1882,189 @@ body { letter-spacing: -0.005em; }
 /* Step 5: quieter dashboard */
 .dash-header { display: block; text-align: center; margin-bottom: 0; }
 .kpi-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 0; }
+.kpi-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kpi-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .kpi-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kpi { padding: 14px 16px; }
 .kpi .label { font-size: 12.5px; color: var(--muted); font-weight: 400; }
 .kpi .value { font-size: 26px; margin: 4px 0 2px; }
 .kpi .delta { font-size: 12px; font-weight: 400; }
+
+.estimate-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.estimate-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.estimate-text {
+  flex: 1;
+}
+.estimate-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 6px;
+}
+.estimate-sub {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.estimate-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.estimate-card.editing .estimate-actions {
+  justify-content: flex-end;
+}
+.estimate-mode-toggle {
+  display: flex;
+  gap: 6px;
+}
+.mode-btn {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms ease-out;
+}
+.mode-btn:hover {
+  border-color: var(--line-strong);
+}
+.mode-btn.active {
+  background: rgba(43, 71, 185, 0.14);
+  border-color: rgba(102, 131, 242, 0.75);
+  color: #fff;
+}
+.estimate-inputs {
+  display: grid;
+  gap: 14px;
+}
+.category-hours-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.section-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+.category-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.category-field label {
+  font-size: 13px;
+  color: #fff;
+  margin: 0;
+}
+.running-total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+}
+.running-total strong {
+  color: #fff;
+}
+.cost-field {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.input-with-unit {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.input-with-unit input {
+  flex: 1;
+  min-width: 0;
+}
+.category-field .input-with-unit input {
+  width: 88px;
+  flex: none;
+}
+.estimate-inputs input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+.unit-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.field-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+.edit-est-btn {
+  background: none;
+  border: none;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 6px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.edit-est-btn:hover {
+  color: var(--teal-mid);
+}
+.est-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.estimate-inputs input[type="number"]::-webkit-outer-spin-button,
+.estimate-inputs input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.estimate-inputs input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.quiet-add-est {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.quiet-add-est:hover {
+  color: var(--teal-dark);
+}
 .approval-item { padding: 14px 16px; margin-bottom: 10px; }
 .approval-body strong { font: 500 14.5px var(--font); color: #fff; }
 .approval-meta { display: block; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
@@ -2004,21 +2092,26 @@ body { letter-spacing: -0.005em; }
 
 @media (max-width: 860px) {
   .agent-grid { grid-template-columns: minmax(0, 1fr); }
-  .kpi-row, .kpi-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-row, .kpi-row.two, .kpi-row.three, .kpi-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-row .kpi:nth-child(3):last-child { grid-column: 1 / -1; }
+  .category-field {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .category-field label {
+    font-size: 12px;
+  }
 }
 @media (max-width: 560px) {
   .stage { padding-top: 24px; }
   .screen-sub { margin-bottom: var(--space-4); }
   .group-card { min-height: 60px; padding: 12px 14px; }
   .group-title { font-size: 15px; }
-  .tally-card { border-radius: 16px; gap: 4px 14px; }
   .approval-actions { padding-left: 0; }
   .kpi .value { font-size: 22px; }
   .calm-sec { margin-top: var(--space-4); }
 }
 @media (max-width: 360px) {
-  .tally-k { flex-basis: 100%; text-align: center; }
   .voice-chip { max-width: 70%; }
 }
 .preview { background: none; border: 0; padding: 0; box-shadow: none; }
@@ -2097,8 +2190,6 @@ body { letter-spacing: -0.005em; }
 .sub-toggle { align-items: center; padding: 14px 16px; min-height: 52px; border-radius: inherit; }
 .sub-toggle .sub-box { flex: none; margin-top: 0; }
 .sub-toggle .sub-title { font-size: 15px; line-height: 1.4; }
-.tally-card.empty { background: rgba(255, 255, 255, 0.03); border-color: var(--line); }
-.tally-empty { color: var(--muted); }
 
 /* ===== v6.3 · Step 1: pick first (type cards, size chips, optional name) ===== */
 .focus.pick { max-width: 560px; margin-top: 2vh; }
