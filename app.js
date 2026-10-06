@@ -15,47 +15,47 @@ const BUSINESS_CONFIG = {
 
 const STEP_LABELS = ["Welcome", "Pains", "Agents", "Connect", "Dashboard", "Home"];
 
-/* Two-level, MECE pain structure. Hours/$ per sub-point are ILLUSTRATIVE weekly weights. */
+/* Two-level, MECE pain structure. Hours/$ per sub-point are a fixed ILLUSTRATIVE typical weekly estimate (editable in the source card). */
 const PAIN_GROUPS = [
   {
     id: "acquire", short: "New customers", title: "I can't get enough new customers.", icon: "🧲", color: "#EDE9FE",
     subs: [
-      { id: "acq_find", title: "I have no steady way to find and win new customers.", short: "No steady way to win new customers", hours: 3, dollars: 450, agents: ["growth"] },
-      { id: "acq_budget", title: "I don't know how to split my ads and social budget, or whether it's working.", short: "Unclear ad & social budget results", hours: 2, dollars: 300, agents: ["growth"] },
-      { id: "acq_time", title: "I don't have time to market consistently.", short: "No time to market consistently", hours: 4, dollars: 250, agents: ["growth"] },
+      { id: "acq_find", title: "I have no steady way to find and win new customers.", short: "No steady way to win new customers", hours: 4, dollars: 540, agents: ["growth"] },
+      { id: "acq_budget", title: "I don't know how to split my ads and social budget, or whether it's working.", short: "Unclear ad & social budget results", hours: 2, dollars: 360, agents: ["growth"] },
+      { id: "acq_time", title: "I don't have time to market consistently.", short: "No time to market consistently", hours: 5, dollars: 300, agents: ["growth"] },
     ],
     connectors: [{ id: "gads" }, { id: "meta" }, { id: "tiktok" }, { id: "gbp" }, { id: "klaviyo", label: "Klaviyo or Mailchimp" }],
   },
   {
     id: "retain", short: "Losing customers", title: "I lose customers I already have.", icon: "🔁", color: "#FCE8E2",
     subs: [
-      { id: "ret_slow", title: "I'm slow to reply to questions and complaints.", short: "Slow replies to questions & complaints", hours: 6, dollars: 280, agents: ["pal"] },
-      { id: "ret_drop", title: "Subscribers and regulars quietly drop off.", short: "Subscribers & regulars dropping off", hours: 3, dollars: 650, agents: ["orders"] },
+      { id: "ret_slow", title: "I'm slow to reply to questions and complaints.", short: "Slow replies to questions & complaints", hours: 7, dollars: 336, agents: ["pal"] },
+      { id: "ret_drop", title: "Subscribers and regulars quietly drop off.", short: "Subscribers & regulars dropping off", hours: 4, dollars: 780, agents: ["orders"] },
     ],
     connectors: [{ id: "gmail" }, { id: "sms" }, { id: "igdm" }, { id: "recharge" }, { id: "klaviyo", label: "Klaviyo" }],
   },
   {
     id: "ops", short: "Operations", title: "Day-to-day operations are chaos.", icon: "📦", color: "#FEF3C7",
     subs: [
-      { id: "ops_stock", title: "I run out of best sellers or get stuck with stock that expires.", short: "Stockouts & expiring stock", hours: 4, dollars: 420, agents: ["pantry"] },
-      { id: "ops_ship", title: "Packing and delivery keep going wrong.", short: "Packing & delivery mistakes", hours: 5, dollars: 360, agents: ["ship"] },
+      { id: "ops_stock", title: "I run out of best sellers or get stuck with stock that expires.", short: "Stockouts & expiring stock", hours: 5, dollars: 504, agents: ["pantry"] },
+      { id: "ops_ship", title: "Packing and delivery keep going wrong.", short: "Packing & delivery mistakes", hours: 6, dollars: 432, agents: ["ship"] },
     ],
     connectors: [{ id: "shopify", label: "Shopify or WooCommerce" }, { id: "square", label: "Square POS" }, { id: "supplier" }, { id: "shipstation" }],
   },
   {
     id: "numbers", short: "Numbers", title: "I don't really know my numbers.", icon: "📊", color: "#DCFCE7",
     subs: [
-      { id: "num_margin", title: "I don't know my margins or where the money goes.", short: "Unclear margins & money flow", hours: 3, dollars: 480, agents: ["cash"] },
-      { id: "num_data", title: "My data is spread across apps, so I never see the whole picture.", short: "Data scattered across apps", hours: 2, dollars: 150, agents: ["cash"] },
+      { id: "num_margin", title: "I don't know my margins or where the money goes.", short: "Unclear margins & money flow", hours: 4, dollars: 576, agents: ["cash"] },
+      { id: "num_data", title: "My data is spread across apps, so I never see the whole picture.", short: "Data scattered across apps", hours: 2, dollars: 180, agents: ["cash"] },
     ],
     connectors: [{ id: "quickbooks" }, { id: "stripe" }, { id: "square", label: "Square" }, { id: "shopify", label: "Shopify" }, { id: "sheets" }],
   },
   {
     id: "stretched", short: "Stretched thin", title: "I'm stretched too thin to run it all.", icon: "⏳", color: "#CCFBF1",
     subs: [
-      { id: "str_tools", title: "My tools don't talk to each other, and setting up new ones takes forever.", short: "Tools don't connect; setup is slow", hours: 3, dollars: 120, agents: ["captain"] },
-      { id: "str_decide", title: "I can't keep up with every decision.", short: "Can't keep up with every decision", hours: 4, dollars: 200, agents: ["captain"] },
-      { id: "str_trust", title: "I don't trust automation, so I check everything myself.", short: "Checking every automation myself", hours: 3, dollars: 100, agents: ["captain"] },
+      { id: "str_tools", title: "My tools don't talk to each other, and setting up new ones takes forever.", short: "Tools don't connect; setup is slow", hours: 4, dollars: 144, agents: ["captain"] },
+      { id: "str_decide", title: "I can't keep up with every decision.", short: "Can't keep up with every decision", hours: 5, dollars: 240, agents: ["captain"] },
+      { id: "str_trust", title: "I don't trust automation, so I check everything myself.", short: "Checking every automation myself", hours: 4, dollars: 120, agents: ["captain"] },
     ],
     connectors: [{ id: "approvals" }, { id: "gcal" }, { id: "gmail" }],
   },
@@ -253,7 +253,6 @@ const subSel = (id) => state.selectedSubs.find((s) => s.id === id);
 const countIn = (g) => g.subs.filter((s) => subSel(s.id)).length;
 const selectedGroups = () => PAIN_GROUPS.filter((g) => countIn(g) > 0);
 const agentById = (id) => AGENTS.find((a) => a.id === id);
-const sevFactor = (s) => 0.6 + 0.2 * s;
 const inp = (k) => Number(state.inputs[k]);
 function escapeHtml(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -287,25 +286,19 @@ const DP = {
   hoursLost: {
     label: "Hours lost / week", kind: "hours",
     source: "Estimate · the problems you picked × typical weekly hours for a shop your size",
-    formula: "Σ (typical hours/week × severity factor). Severity factor = 0.6 + 0.2 × severity (1–5).",
+    formula: "Sum of the typical hours/week for each problem you picked. Edit any estimate below.",
     inputs: () => state.selectedSubs.map((s) => ({ key: `subHours.${s.id}`, label: `${subById(s.id).short} · typical hrs/week`, unit: "hrs" })),
-    breakdown: () => state.selectedSubs.map((s) => {
-      const h = inp(`subHours.${s.id}`); const f = sevFactor(s.severity);
-      return `${subById(s.id).short}: ${h}h × ${f.toFixed(1)} = ${Math.round(h * f)}h`;
-    }),
-    compute: () => state.selectedSubs.reduce((a, s) => a + Math.round(inp(`subHours.${s.id}`) * sevFactor(s.severity)), 0),
+    breakdown: () => state.selectedSubs.map((s) => `${subById(s.id).short}: ${inp(`subHours.${s.id}`)}h`),
+    compute: () => state.selectedSubs.reduce((a, s) => a + inp(`subHours.${s.id}`), 0),
     updated: "Live · recalculates as you pick",
   },
   dollarsAtStake: {
     label: "$ at stake / week", kind: "money",
     source: "Estimate · the problems you picked × typical weekly $ impact (lost sales, spoilage, churn)",
-    formula: "Σ (typical $/week × severity factor). Severity factor = 0.6 + 0.2 × severity (1–5).",
+    formula: "Sum of the typical $/week for each problem you picked (lost sales, spoilage, churn). Edit any estimate below.",
     inputs: () => state.selectedSubs.map((s) => ({ key: `subDollars.${s.id}`, label: `${subById(s.id).short} · typical $/week`, unit: "$" })),
-    breakdown: () => state.selectedSubs.map((s) => {
-      const d = inp(`subDollars.${s.id}`); const f = sevFactor(s.severity);
-      return `${subById(s.id).short}: $${d} × ${f.toFixed(1)} = $${Math.round(d * f)}`;
-    }),
-    compute: () => state.selectedSubs.reduce((a, s) => a + Math.round(inp(`subDollars.${s.id}`) * sevFactor(s.severity)), 0),
+    breakdown: () => state.selectedSubs.map((s) => `${subById(s.id).short}: $${inp(`subDollars.${s.id}`).toLocaleString()}`),
+    compute: () => state.selectedSubs.reduce((a, s) => a + inp(`subDollars.${s.id}`), 0),
     updated: "Live · recalculates as you pick",
   },
   revenue: {
@@ -1151,12 +1144,6 @@ function renderPainGroup(g) {
               <span class="sub-box" aria-hidden="true">${sel ? "✓" : ""}</span>
               <span class="sub-title">${escapeHtml(s.title)}</span>
             </button>
-            ${sel ? `
-            <div class="severity sub-sev">
-              <label for="sev-${s.id}">How much it hurts</label>
-              <input id="sev-${s.id}" type="range" min="1" max="5" value="${sel.severity}" data-sev="${s.id}" />
-              <span class="severity-val">${sel.severity}/5</span>
-            </div>` : ""}
           </div>`;
         }).join("")}
       </div>
@@ -1606,7 +1593,7 @@ function bindScreen() {
       const g = groupById(e.currentTarget.dataset.selectAll);
       const allOn = g.subs.every((s) => subSel(s.id));
       if (allOn) state.selectedSubs = state.selectedSubs.filter((x) => !g.subs.some((s) => s.id === x.id));
-      else g.subs.forEach((s) => { if (!subSel(s.id)) state.selectedSubs.push({ id: s.id, severity: 3 }); });
+      else g.subs.forEach((s) => { if (!subSel(s.id)) state.selectedSubs.push({ id: s.id }); });
       state._agentsTouched = false;
       AGENTS.forEach((a) => { if (!a.alwaysOn) delete state.agentsOn[a.id]; });
       render({ keepScroll: true });
@@ -1616,17 +1603,10 @@ function bindScreen() {
       const b = e.target.closest("[data-sub-toggle]"); if (!b) return;
       const id = b.dataset.subToggle;
       const idx = state.selectedSubs.findIndex((s) => s.id === id);
-      if (idx >= 0) state.selectedSubs.splice(idx, 1); else state.selectedSubs.push({ id, severity: 3 });
+      if (idx >= 0) state.selectedSubs.splice(idx, 1); else state.selectedSubs.push({ id });
       state._agentsTouched = false;
       AGENTS.forEach((a) => { if (!a.alwaysOn) delete state.agentsOn[a.id]; });
       render({ keepScroll: true });
-    });
-    list?.addEventListener("input", (e) => {
-      const input = e.target.closest("[data-sev]"); if (!input) return;
-      const sel = subSel(input.dataset.sev); if (!sel) return;
-      sel.severity = Number(input.value);
-      input.parentElement.querySelector(".severity-val").textContent = `${sel.severity}/5`;
-      updateTallyLive();
     });
   }
 

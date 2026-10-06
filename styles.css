@@ -2090,3 +2090,10 @@ body { letter-spacing: -0.005em; }
 .ins-measure:hover { color: #fff; }
 .fix-tag { display: inline-block; margin-left: 8px; font-size: 11px; color: var(--green); white-space: nowrap; }
 .task.fix .task-btn { border-left-color: var(--green); }
+
+/* ===== v6.1 · Sub-points are simple tap-to-select rows (no severity) ===== */
+.sub-list { display: grid; gap: 8px; }
+.sub-item { padding: 0; }
+.sub-toggle { align-items: center; padding: 14px 16px; min-height: 52px; border-radius: inherit; }
+.sub-toggle .sub-box { flex: none; margin-top: 0; }
+.sub-toggle .sub-title { font-size: 15px; line-height: 1.4; }
